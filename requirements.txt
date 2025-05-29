@@ -5,3 +5,7 @@ yfinance
 requests
 python-dotenv
 google-generativeai
+Flask-Mail>=0.9.1
+Flask-WTF>=1.2.1
+itsdangerous>=2.1.2
+email_validator>=2.1.0
