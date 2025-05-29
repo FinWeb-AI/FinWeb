@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}FinWeb AI 助理{% endblock %}
+
+{# 
+<iframe src="/assistant">
+#}
+{% block widget %}{% endblock %}
+
+{% block content %}
+<style>
+  /* ====== FinWeb AI 助理內部樣式 ====== */
+  #chat-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 100vh;
+  }
+  #chat-box {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  .ai   { background: #222; color: #00d084; padding: 6px 10px; margin: 6px 0; border-radius: 6px; }
+  .user { background: #0d6efd; color: #fff;  padding: 6px 10px; margin: 6px 0; border-radius: 6px; align-self: flex-end; }
+  form  { display: flex; gap: 6px; }
+  #chat-input { flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid #666; background: #111; color: #e6edf3; }
+  #chat-input:focus { outline: none; border-color: #00d084; }
+  #chat-send  { padding: 6px 14px; border: none; border-radius: 6px; background: #00d084; color: #000; font-weight: 600; }
+</style>
+
+<div id="chat-wrapper">
+  <h2 class="mb-2">FinWeb AI 助理</h2>
+
+  <div id="chat-box" class="d-flex flex-column"></div>
+
+  <form id="chat-form" autocomplete="off">
+    <input id="chat-input" placeholder="輸入問題…" />
+    <button id="chat-send" type="submit">送出</button>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const box   = document.getElementById('chat-box');
+  const input = document.getElementById('chat-input');
+  const form  = document.getElementById('chat-form');
+
+  function append(text, cls) {
+    const div = document.createElement('div');
+    div.className = cls;
+    div.textContent = text;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const msg = input.value.trim();
+    if (!msg) return;
+    append(msg, 'user');
+    input.value = ''; input.focus();
+
+    // Loading placeholder
+    append(' 處理中…', 'ai');
+    const loadingEl = box.lastChild;
+
+    try {
+      const res  = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+      });
+      const data = await res.json();
+      loadingEl.remove();
+      if (data.reply) append(data.reply, 'ai');
+      else append(` ${data.error || '未知錯誤'}`, 'ai');
+    } catch (err) {
+      loadingEl.remove();
+      append(' 連線失敗', 'ai');
+    }
+  });
+});
+</script>
+{% endblock %}

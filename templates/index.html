@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard - FinWeb{% endblock %}
+
+{% block content %}
+<h1>即時行情</h1>
+
+<section id="stock-section">
+  <h2>股票</h2>
+  <form id="stock-form">
+    <input type="text" id="stock-symbol" placeholder="輸入代號，例如 TSLA" />
+    <button type="submit">查詢</button>
+  </form>
+  <pre id="stock-result">—</pre>
+</section>
+
+<section id="crypto-section">
+  <h2>加密貨幣</h2>
+  <form id="crypto-form">
+    <input type="text" id="crypto-id" placeholder="輸入 ID，例如 bitcoin" />
+    <button type="submit">查詢</button>
+  </form>
+  <pre id="crypto-result">—</pre>
+</section>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}市場概覽 - FinWeb{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">市場概覽</h1>
+
+<section class="card-block">
+  <canvas id="global-chart" height="200"></canvas>
+  <p class="mt-3">這邊會載入全球指數／大宗商品／匯率等折線圖，並每分鐘更新。</p>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+{% raw %}
+  // 這邊折線圖 但還沒設計好
+  document.addEventListener('DOMContentLoaded', () => {
+    const ctx = document.getElementById('global-chart').getContext('2d');
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: Array.from({ length: 20 }, (_, i) => `T-${20 - i}`),
+        datasets: [{
+          label: 'S&P 500',
+          tension: 0.3,
+          borderWidth: 2,
+          fill: false,
+          data: Array.from({ length: 20 }, () => Math.random() * 100 + 4000)
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { ticks: { color: '#e6edf3' }, grid: { display: false } },
+          y: { ticks: { color: '#e6edf3' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+        }
+      }
+    });
+  });
+{% endraw %}
+</script>
+{% endblock %}
