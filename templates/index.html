@@ -1,128 +1,252 @@
-{% extends 'base.html' %}
-{% block title %}Dashboard – FinWeb{% endblock %}
+{% extends "base.html" %}
+{% block title %}即時行情 – FinWeb{% endblock %}
 
 {% block content %}
 <h1 class="mb-4">即時行情</h1>
 
-<section id="stock-section" class="mb-5">
-  <h2>股票</h2>
-  <form id="stock-form" class="d-flex align-items-center">
-    <input type="text" id="stock-symbol" class="form-control w-50" placeholder="輸入代號，例如 TSLA" />
-    <button class="btn btn-primary ms-2">查詢</button>
-  </form>
-  <pre id="stock-result" class="mt-2 text-light">—</pre>
-</section>
-
 <section id="crypto-section">
-  <h2>加密貨幣</h2>
-  <div class="mb-3">
-    <select id="crypto-select" class="form-select w-auto d-inline-block">
-      <option value="">請選擇...</option>
-    </select>
-    <button id="start-btn" class="btn btn-success ms-2" disabled>開始更新</button>
-    <button id="download-btn" class="btn btn-outline-light ms-2" disabled>下載 CSV</button>
+  <h2>加密貨幣 (Binance USDT 交易對)</h2>
+
+  <div class="d-flex flex-wrap align-items-center mb-2 gap-2">
+    <select id="crypto-sel" class="form-select w-auto" disabled></select>
+    <button id="toggle-btn" class="btn btn-success" disabled>開始更新</button>
+    <button id="csv-btn"    class="btn btn-outline-light" disabled>下載 CSV</button>
   </div>
-  <canvas id="crypto-chart" class="border rounded" style="background:#0f1117; width:100%; height:400px;"></canvas>
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <canvas id="price-chart" height="350"></canvas>
+    </div>
+    <div class="col-lg-4">
+      <div id="detail-box" class="card bg-dark text-light p-3">
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mt-3">
+    <div class="col-lg-6">
+      <div class="card bg-dark text-light">
+        <div class="card-header">訂單簿 (Depth)</div>
+        <div class="card-body p-1" style="max-height:240px; overflow-y:auto;">
+          <table class="table table-dark table-sm mb-0">
+            <thead>
+              <tr>
+                <th colspan="2" class="text-center">買盤</th>
+                <th colspan="2" class="text-center">賣盤</th>
+              </tr>
+              <tr>
+                <th>價格</th><th>數量</th><th>價格</th><th>數量</th>
+              </tr>
+            </thead>
+            <tbody id="order-book-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card bg-dark text-light">
+        <div class="card-header">最新成交</div>
+        <div class="card-body p-1" style="max-height:240px; overflow-y:auto;">
+          <table class="table table-dark table-sm mb-0">
+            <thead>
+              <tr><th>時間</th><th>價格</th><th>數量</th></tr>
+            </thead>
+            <tbody id="trades-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 </section>
 {% endblock %}
 
+
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function(){
-  const sel         = document.getElementById('crypto-select');
-  const startBtn    = document.getElementById('start-btn');
-  const downloadBtn = document.getElementById('download-btn');
-  const ctx         = document.getElementById('crypto-chart').getContext('2d');
+document.addEventListener('DOMContentLoaded', async () => {
+  const sel    = document.getElementById('crypto-sel');
+  const btn    = document.getElementById('toggle-btn');
+  const csvBt  = document.getElementById('csv-btn');
+  const box    = document.getElementById('detail-box');
+  const ctx    = document.getElementById('price-chart').getContext('2d');
+  let wsTicker, wsDepth, wsTrades;
 
   const chart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'Price (USD)',
-        data: [],
-        borderColor: '#2962FF',
-        borderWidth: 2,
-        tension: 0.1,
-        pointRadius: 0
-      }]
-    },
-    options: {
-      animation: false,
-      scales: {
-        x: { display: true },
-        y: {
-          beginAtZero: false,
-          ticks: { color: '#D1D4DC' }
-        }
+    type:'line',
+    data:{ labels:[], datasets:[{
+      label: 'Price (USDT)',
+      data: [],
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: .25,
+      borderColor: s => {
+        const i = s.p0DataIndex ?? 1,
+              d = s.chart.data.datasets[0].data;
+        return d[i] >= d[i-1] ? '#26a69a' : '#ef5350';
       },
-      plugins: {
-        legend: { labels: { color: '#D1D4DC' } }
+      segment: {
+        borderColor: c =>
+          c.p1.parsed.y >= c.p0.parsed.y ? '#26a69a' : '#ef5350'
       }
+    }]},
+    options:{
+      animation:false,
+      scales:{
+        x:{ ticks:{color:'#bbb'}, offset:true },
+        y:{ ticks:{color:'#bbb', callback:v=>v.toLocaleString()} }
+      },
+      plugins:{ legend:{ labels:{color:'#fff'} } }
     }
   });
 
-  let timer = null;
-
-  fetch('/api/coins')
-    .then(r => r.json())
-    .then(list => {
-      list.forEach(c => {
-        sel.add(new Option(`${c.symbol.toUpperCase()} – ${c.name}`, c.id));
-      });
-    })
-    .catch(console.error);
+  try {
+    const all = await fetch('https://api.binance.com/api/v3/ticker/price')
+                      .then(r=>r.json());
+    const usdt = all.filter(c=>c.symbol.endsWith('USDT'));
+    usdt.forEach(c => sel.add(new Option(c.symbol, c.symbol)));
+    sel.disabled = false;
+    btn.disabled = false;
+  } catch(e) {
+    console.error('取交易對列表失敗', e);
+    return;
+  }
 
   sel.addEventListener('change', () => {
+    stopWS();
+    resetAll();
+  });
+  btn.addEventListener('click', () => {
+    btn.textContent==='開始更新' ? startWS() : stopWS();
+  });
+
+  function startWS(){
+    const symbol = sel.value.toLowerCase();
+
+    resetAll();
+    btn.textContent = '停止更新';
+    csvBt.disabled = false;
+
+    wsTicker = new WebSocket(
+      `wss://stream.binance.com:9443/ws/${symbol}@ticker`
+    );
+    wsTicker.onmessage = evt => {
+      const d = JSON.parse(evt.data);
+      const price = parseFloat(d.c);
+      const t = new Date().toLocaleTimeString();
+
+      pushPoint(t, price);
+      autoScale();
+      chart.update('none');
+
+      box.innerHTML = `
+        <h4>${d.s.replace('USDT','')} / USDT</h4>
+        <div>最新：${parseFloat(d.c).toLocaleString()}</div>
+        <div>24h 漲跌：<span style="color:${parseFloat(d.P)>=0?'#26a69a':'#ef5350'}">
+          ${parseFloat(d.p).toFixed(2)}（${parseFloat(d.P).toFixed(2)}%）</span></div>
+        <div>最高：${parseFloat(d.h).toLocaleString()}</div>
+        <div>最低：${parseFloat(d.l).toLocaleString()}</div>
+        <div>成交量：${parseFloat(d.v).toLocaleString()}</div>
+      `;
+    };
+
+    wsDepth = new WebSocket(
+      `wss://stream.binance.com:9443/ws/${symbol}@depth5@100ms`
+    );
+    wsDepth.onmessage = evt => {
+      const d = JSON.parse(evt.data);
+      updateOrderBook(d.bids, d.asks);
+    };
+
+    wsTrades = new WebSocket(
+      `wss://stream.binance.com:9443/ws/${symbol}@trade`
+    );
+    wsTrades.onmessage = evt => {
+      const d = JSON.parse(evt.data);
+      updateTrades(d);
+    };
+  }
+
+  function stopWS(){
+    [wsTicker, wsDepth, wsTrades].forEach(w=>{
+      if(w){ w.close(); }
+    });
+    wsTicker = wsDepth = wsTrades = null;
+    btn.textContent = '開始更新';
+  }
+
+  function resetAll(){
     chart.data.labels.length = 0;
     chart.data.datasets[0].data.length = 0;
     chart.update();
-    startBtn.disabled = !sel.value;
-    downloadBtn.disabled = true;
-    clearInterval(timer);
-    startBtn.textContent = '開始更新';
-  });
+    box.innerHTML = '';
+    document.getElementById('order-book-body').innerHTML = '';
+    document.getElementById('trades-body').innerHTML = '';
+    csvBt.disabled = true;
+  }
 
-  startBtn.addEventListener('click', () => {
-    if (startBtn.textContent === '開始更新') {
-      timer = setInterval(() => {
-        fetch(`/api/crypto_price?id=${sel.value}`)
-          .then(r => r.json())
-          .then(d => {
-            const t = new Date(d.timestamp);
-            chart.data.labels.push(t.toLocaleTimeString());
-            chart.data.datasets[0].data.push(d.price);
-            chart.update('none');
-          })
-          .catch(console.error);
-      }, 1000);
-      startBtn.textContent = '停止更新';
-      downloadBtn.disabled = false;
+  function pushPoint(label, val){
+    const L = chart.data.labels, D = chart.data.datasets[0].data;
+    if(L.length && L[L.length-1]===label){
+      D[D.length-1] = val;
     } else {
-      clearInterval(timer);
-      startBtn.textContent = '開始更新';
+      L.push(label); D.push(val);
+      if(L.length>120){ L.shift(); D.shift(); }
     }
-  });
+  }
 
-  downloadBtn.addEventListener('click', () => {
-    const labels = chart.data.labels;
-    const data   = chart.data.datasets[0].data;
-    let csv = 'timestamp,price\n';
-    labels.forEach((lab, i) => {
-      csv += `${lab},${data[i]}\n`;
+  function autoScale(){
+    const d = chart.data.datasets[0].data;
+    if(!d.length) return;
+    const mx = Math.max(...d), mn = Math.min(...d);
+    chart.options.scales.y.min = mn*0.999;
+    chart.options.scales.y.max = mx*1.001;
+  }
+
+  function updateOrderBook(bids, asks){
+    const body = document.getElementById('order-book-body');
+    body.innerHTML = '';
+    for(let i=0; i<5; i++){
+      const bid = bids[i]||['',''], ask = asks[i]||['',''];
+      const tr  = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${parseFloat(bid[0]).toLocaleString()}</td>
+        <td>${parseFloat(bid[1]).toLocaleString()}</td>
+        <td>${parseFloat(ask[0]).toLocaleString()}</td>
+        <td>${parseFloat(ask[1]).toLocaleString()}</td>
+      `;
+      body.appendChild(tr);
+    }
+  }
+
+  function updateTrades(d){
+    const body = document.getElementById('trades-body');
+    const tr   = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${new Date(d.T).toLocaleTimeString()}</td>
+      <td style="color:${d.m? '#ef5350':'#26a69a'}">
+        ${parseFloat(d.p).toLocaleString()}
+      </td>
+      <td>${parseFloat(d.q).toLocaleString()}</td>
+    `;
+    body.prepend(tr);
+    if(body.children.length>20){
+      body.removeChild(body.lastChild);
+    }
+  }
+
+  csvBt.addEventListener('click', ()=>{
+    const rows = ['time,price'];
+    chart.data.labels.forEach((l,i)=>{
+      rows.push(`${l},${chart.data.datasets[0].data[i]}`);
     });
-    const blob = new Blob([csv], { type:'text/csv' });
-    const url  = URL.createObjectURL(blob);
+    const blob = new Blob([rows.join('\n')],{type:'text/csv'});
     const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `${sel.value}_history.csv`;
+    a.href     = URL.createObjectURL(blob);
+    a.download = `${sel.value}_${Date.now()}.csv`;
     a.click();
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(a.href);
   });
 
-  window.addEventListener('resize', () => {
-    chart.resize();
-  });
 });
 </script>
 {% endblock %}

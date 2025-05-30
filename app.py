@@ -43,9 +43,9 @@ app.config.update(
     RECAPTCHA_SECRET_KEY= CFG["ReCAPTCHA"].get("SECRET_KEY", "")
 )
 
-db   = SQLAlchemy(app)
+db = SQLAlchemy(app)
 mail = Mail(app)
-ts   = URLSafeTimedSerializer(app.secret_key)
+ts = URLSafeTimedSerializer(app.secret_key)
 login_mgr = LoginManager(app)
 login_mgr.login_view = "login"
 
@@ -63,8 +63,7 @@ with app.app_context():
     db.create_all()
 
 @login_mgr.user_loader
-def load_user(uid):
-    return User.query.get(int(uid))
+def load_user(uid): return User.query.get(int(uid))
 
 class _F(FlaskForm):
     class Meta: csrf = False
@@ -83,8 +82,7 @@ class LoginForm(_F):
 
 def verify_recaptcha(tok:str)->bool:
     s = app.config["RECAPTCHA_SECRET_KEY"]
-    if not (s and tok):
-        return True
+    if not (s and tok): return True
     try:
         r = requests.post(
             "https://www.google.com/recaptcha/api/siteverify",
@@ -123,14 +121,14 @@ def register():
             flash("此信箱已註冊過","danger")
         else:
             c   = f"{uuid.uuid4().int % 1000000:06d}"
-            exp = int(time.time()) + 3600
+            exp = int(time.time())+3600
             db.session.add(User(
-                username=u, email=e,
+                username=u,email=e,
                 password=generate_password_hash(p),
-                confirm_code=c, confirm_expire=exp
+                confirm_code=c,confirm_expire=exp
             ))
             db.session.commit()
-            link = url_for("confirm", _external=True)
+            link = url_for("confirm",_external=True)
             mail.send(Message(
                 "FinWeb 電子郵件驗證",
                 recipients=[e],
@@ -173,7 +171,7 @@ def login():
         e = request.form["email"].lower().strip()
         p = request.form["password"]
         u = User.query.filter_by(email=e).first()
-        if not u or not check_password_hash(u.password, p):
+        if not u or not check_password_hash(u.password,p):
             flash("帳號或密碼錯誤","danger")
         elif not u.confirmed:
             flash("請先完成電子郵件驗證！","warning")
@@ -191,47 +189,120 @@ def logout():
     logout_user()
     return redirect(url_for("index"))
 
-@app.route("/api/stock")
-def api_stock():
-    sym = request.args.get("symbol","AAPL")
-    return jsonify({"symbol":sym,"price":0})
+PRICE_CACHE : dict[str, dict]  = {}
+DETAIL_CACHE: dict[str, dict]  = {}
+OHLC_CACHE  : dict[str, dict]  = {}
 
-@app.route("/api/crypto")
-def api_crypto():
-    cid = request.args.get("id","bitcoin")
-    return jsonify({"id":cid,"price":0})
+FAIL_PRICE  : dict[str, float] = {}
+FAIL_DETAIL : dict[str, float] = {}
+FAIL_OHLC   : dict[str, float] = {}
+
+PRICE_TTL  = 15
+DETAIL_TTL = 120
+OHLC_TTL   = 120
+BACKOFF    = 60
+
+def _cached(cache,key,ttl):  return key in cache and time.time()-cache[key]["ts"]<ttl
+def _in_backoff(fail,key):   return time.time()-fail.get(key,0)<BACKOFF
 
 @app.route("/api/coins")
 def api_coins():
-    resp = requests.get(
-        "https://api.coingecko.com/api/v3/coins/markets",
-        params={
-            "vs_currency":"usd",
-            "order":"market_cap_desc",
-            "per_page":100,
-            "page":1,
-            "sparkline":False
-        }, timeout=5
-    )
-    data = [
-        {"id":c["id"], "symbol":c["symbol"], "name":c["name"]}
-        for c in resp.json()
-    ]
-    return jsonify(data)
+    try:
+        r = requests.get("https://api.coingecko.com/api/v3/coins/markets",
+                         params=dict(vs_currency="usd",order="market_cap_desc",
+                                     per_page=100,page=1,sparkline="false"),
+                         timeout=6)
+        r.raise_for_status()
+        return jsonify([{ "id":d["id"], "symbol":d["symbol"], "name":d["name"] }
+                        for d in r.json()])
+    except Exception as e:
+        app.logger.error(f"/api/coins error: {e}")
+        return jsonify({"error":"service unavailable"}),503
 
 @app.route("/api/crypto_price")
 def api_crypto_price():
-    cid = request.args.get("id","bitcoin")
-    resp = requests.get(
-        "https://api.coingecko.com/api/v3/simple/price",
-        params={"ids":cid, "vs_currencies":"usd"}, timeout=5
-    )
-    price = resp.json().get(cid, {}).get("usd", 0)
-    return jsonify({
-        "id": cid,
-        "price": price,
-        "timestamp": int(time.time()*1000)
-    })
+    cid=(request.args.get("id") or "bitcoin").lower().strip()
+    if _cached(PRICE_CACHE,cid,PRICE_TTL):
+        return jsonify(PRICE_CACHE[cid]["data"])
+    if _in_backoff(FAIL_PRICE,cid):
+        return jsonify(PRICE_CACHE.get(cid,{}).get("data",{"error":"backoff"}))
+    try:
+        r=requests.get("https://api.coingecko.com/api/v3/simple/price",
+                       params=dict(ids=cid,vs_currencies="usd,twd"),timeout=6)
+        r.raise_for_status()
+        src=r.json().get(cid)
+        if not src: raise ValueError("coin not found")
+        data=dict(timestamp=int(time.time()*1000),
+                  price_usd=float(src.get("usd",0)),
+                  price_twd=float(src.get("twd",0)))
+        PRICE_CACHE[cid]=dict(ts=time.time(),data=data)
+        return jsonify(data)
+    except Exception as e:
+        FAIL_PRICE[cid]=time.time()
+        app.logger.warning(f"/api/crypto_price error: {e}")
+        return jsonify(PRICE_CACHE.get(cid,{}).get("data",{"error":"not found"})),200
+
+@app.route("/api/crypto_detail")
+def api_crypto_detail():
+    cid=(request.args.get("id") or "bitcoin").lower().strip()
+    if _cached(DETAIL_CACHE,cid,DETAIL_TTL):
+        return jsonify(DETAIL_CACHE[cid]["data"])
+    if _in_backoff(FAIL_DETAIL,cid):
+        return jsonify(DETAIL_CACHE.get(cid,{}).get("data",{"error":"backoff"}))
+    try:
+        mkt=requests.get("https://api.coingecko.com/api/v3/coins/markets",
+                         params=dict(vs_currency="usd",ids=cid,sparkline="false"),timeout=6)
+        mkt.raise_for_status()
+        m=(mkt.json() or [None])[0]
+        if not m: raise ValueError("coin not found")
+
+        twd=requests.get("https://api.coingecko.com/api/v3/simple/price",
+                         params=dict(ids=cid,vs_currencies="twd"),timeout=6
+                        ).json().get(cid,{}).get("twd",0)
+
+        data=dict(
+            id=cid,
+            symbol=m["symbol"],
+            name=m["name"],
+            usd=m["current_price"],
+            twd=twd,
+            chg=m["price_change_24h"],
+            chg_pct=m["price_change_percentage_24h"],
+            high=m["high_24h"],
+            low=m["low_24h"],
+            vol=m["total_volume"],
+            market_cap=m.get("market_cap"),
+            market_cap_rank=m.get("market_cap_rank"),
+            total_supply=m.get("total_supply"),
+            max_supply=m.get("max_supply"),
+        )
+        DETAIL_CACHE[cid]=dict(ts=time.time(),data=data)
+        return jsonify(data)
+    except Exception as e:
+        FAIL_DETAIL[cid]=time.time()
+        app.logger.warning(f"/api/crypto_detail error: {e}")
+        return jsonify(DETAIL_CACHE.get(cid,{}).get("data",{"error":"not found"})),200
+
+@app.route("/api/ohlc")
+def api_ohlc():
+    cid =(request.args.get("id") or "bitcoin").lower().strip()
+    days=request.args.get("days","1")
+    key =f"{cid}_{days}"
+    if _cached(OHLC_CACHE,key,OHLC_TTL):
+        return jsonify(OHLC_CACHE[key]["data"])
+    if _in_backoff(FAIL_OHLC,key):
+        return jsonify(OHLC_CACHE.get(key,{}).get("data",{"error":"backoff"}))
+    try:
+        r=requests.get(f"https://api.coingecko.com/api/v3/coins/{cid}/ohlc",
+                       params=dict(vs_currency="usd",days=days),timeout=6)
+        r.raise_for_status()
+        data=r.json()
+        OHLC_CACHE[key]=dict(ts=time.time(),data=data)
+        return jsonify(data)
+    except Exception as e:
+        FAIL_OHLC[key]=time.time()
+        app.logger.warning(f"/api/ohlc error: {e}")
+        return jsonify(OHLC_CACHE.get(key,{}).get("data",{"error":"not found"})),200
 
 SYSTEM_PROMPT = """
 You are FinWeb AI Financial Assistant, a professional financial analyst and market strategist.
@@ -246,10 +317,12 @@ You are FinWeb AI Financial Assistant, a professional financial analyst and mark
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
     msg = (request.json or {}).get("message","").strip()
-    if not msg:
-        return jsonify({"error":"empty"}),400
+    if not msg: return jsonify({"error":"empty"}),400
     return jsonify({"reply":"此環境無法呼叫 Gemini API，僅示範回覆。"})
 
-if __name__=="__main__":
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(message)s",
+        datefmt="%H:%M:%S")
     app.run(debug=True, threaded=True, port=5000)
