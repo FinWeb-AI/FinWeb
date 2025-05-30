@@ -1,87 +1,75 @@
-{% extends 'base.html' %}
-{% block title %}FinWeb AI 助理{% endblock %}
-
-{# 
-<iframe src="/assistant">
-#}
-{% block widget %}{% endblock %}
-
-{% block content %}
-<style>
-  /* ====== FinWeb AI 助理內部樣式 ====== */
-  #chat-wrapper {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    max-height: 100vh;
-  }
-  #chat-box {
-    flex: 1;
-    overflow-y: auto;
-    border: 1px solid #444;
-    border-radius: 8px;
-    padding: 8px;
-    margin-bottom: 8px;
-  }
-  .ai   { background: #222; color: #00d084; padding: 6px 10px; margin: 6px 0; border-radius: 6px; }
-  .user { background: #0d6efd; color: #fff;  padding: 6px 10px; margin: 6px 0; border-radius: 6px; align-self: flex-end; }
-  form  { display: flex; gap: 6px; }
-  #chat-input { flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid #666; background: #111; color: #e6edf3; }
-  #chat-input:focus { outline: none; border-color: #00d084; }
-  #chat-send  { padding: 6px 14px; border: none; border-radius: 6px; background: #00d084; color: #000; font-weight: 600; }
-</style>
-
-<div id="chat-wrapper">
-  <h2 class="mb-2">FinWeb AI 助理</h2>
-
-  <div id="chat-box" class="d-flex flex-column"></div>
-
-  <form id="chat-form" autocomplete="off">
-    <input id="chat-input" placeholder="輸入問題…" />
-    <button id="chat-send" type="submit">送出</button>
-  </form>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  const box   = document.getElementById('chat-box');
-  const input = document.getElementById('chat-input');
-  const form  = document.getElementById('chat-form');
-
-  function append(text, cls) {
-    const div = document.createElement('div');
-    div.className = cls;
-    div.textContent = text;
-    box.appendChild(div);
-    box.scrollTop = box.scrollHeight;
-  }
-
-  form.addEventListener('submit', async e => {
-    e.preventDefault();
-    const msg = input.value.trim();
-    if (!msg) return;
-    append(msg, 'user');
-    input.value = ''; input.focus();
-
-    // Loading placeholder
-    append(' 處理中…', 'ai');
-    const loadingEl = box.lastChild;
-
-    try {
-      const res  = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg })
-      });
-      const data = await res.json();
-      loadingEl.remove();
-      if (data.reply) append(data.reply, 'ai');
-      else append(` ${data.error || '未知錯誤'}`, 'ai');
-    } catch (err) {
-      loadingEl.remove();
-      append(' 連線失敗', 'ai');
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FinWeb AI 助理</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      margin:0; padding:0;
+      background:#202226; color:#fff;
+      display:flex; flex-direction:column;
+      height:100vh; font-family:sans-serif;
     }
-  });
-});
-</script>
-{% endblock %}
+    .chat-body {
+      flex:1; overflow-y:auto; padding:1rem;
+    }
+    .chat-input {
+      display:flex; background:#181a1f;
+      padding:0.5rem; gap:0.5rem;
+    }
+    .chat-input input {
+      flex:1; padding:0.5rem; border:none;
+      border-radius:4px; background:#2a2e37; color:#fff;
+    }
+    .chat-input button {
+      padding:0.5rem 1rem; border:none;
+      border-radius:4px; background:#26a69a; color:#fff;
+    }
+    .msg { margin-bottom:0.75rem; max-width:80%; padding:0.5rem 0.75rem; border-radius:4px; line-height:1.4; }
+    .msg.user { background:#26a69a; margin-left:auto; }
+    .msg.bot  { background:#2a2e37; margin-right:auto; }
+  </style>
+</head>
+<body>
+  <!-- **注意：已移除整個 chat-header ** -->
+  <div id="chat-body" class="chat-body"></div>
+  <div class="chat-input">
+    <input id="chat-input" type="text" placeholder="輸入問題…" autocomplete="off" />
+    <button id="chat-send">送出</button>
+  </div>
+
+  <script>
+    const bodyEl = document.getElementById('chat-body');
+    const inEl   = document.getElementById('chat-input');
+    const send   = document.getElementById('chat-send');
+
+    function append(text, who){
+      const d = document.createElement('div');
+      d.className = 'msg '+who;
+      d.textContent = text;
+      bodyEl.appendChild(d);
+      bodyEl.scrollTop = bodyEl.scrollHeight;
+    }
+
+    function sendMsg(){
+      const txt = inEl.value.trim();
+      if(!txt) return;
+      append(txt,'user');
+      inEl.value='';
+      fetch('/api/chat',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({message:txt})
+      })
+      .then(r=>r.json())
+      .then(j=>append(j.reply,'bot'))
+      .catch(_=>append('系統錯誤，請稍後再試。','bot'));
+    }
+
+    send.onclick = sendMsg;
+    inEl.onkeydown = e=>{ if(e.key==='Enter') sendMsg(); };
+  </script>
+</body>
+</html>
