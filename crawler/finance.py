@@ -2,7 +2,6 @@ import requests, datetime
 import yfinance as yf
 
 def get_stock(symbol: str):
-    """回傳單支股票最新收盤價"""
     ticker = yf.Ticker(symbol)
     data   = ticker.history(period="1d")
     if data.empty:
@@ -15,7 +14,6 @@ def get_stock(symbol: str):
     }
 
 def get_crypto(coin_id: str = "bitcoin"):
-    """回傳單一加密貨幣現價 (USD)"""
     url = ("https://api.coingecko.com/api/v3/simple/price"
            f"?ids={coin_id}&vs_currencies=usd")
     r = requests.get(url, timeout=10)
@@ -23,7 +21,7 @@ def get_crypto(coin_id: str = "bitcoin"):
         return {"error": "API 失敗"}
     price = r.json().get(coin_id, {}).get("usd")
     return {
-        "id":   coin_id,
+        "id":    coin_id,
         "price": price,
-        "time": datetime.datetime.utcnow().isoformat() + "Z"
+        "time":  datetime.datetime.utcnow().isoformat() + "Z"
     }

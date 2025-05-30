@@ -33,31 +33,31 @@ app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config.update(
-    MAIL_SERVER=CFG["Email"]["MAIL_SERVER"],
-    MAIL_PORT=int(CFG["Email"]["MAIL_PORT"]),
-    MAIL_USE_TLS=CFG["Email"].getboolean("MAIL_USE_TLS"),
-    MAIL_USERNAME=CFG["Email"]["MAIL_USERNAME"],
-    MAIL_PASSWORD=CFG["Email"]["MAIL_PASSWORD"],
-    MAIL_DEFAULT_SENDER=CFG["Email"]["MAIL_DEFAULT_SENDER"],
-    RECAPTCHA_SITE_KEY=CFG["ReCAPTCHA"].get("SITE_KEY", ""),
-    RECAPTCHA_SECRET_KEY=CFG["ReCAPTCHA"].get("SECRET_KEY", "")
+    MAIL_SERVER         = CFG["Email"]["MAIL_SERVER"],
+    MAIL_PORT           = int(CFG["Email"]["MAIL_PORT"]),
+    MAIL_USE_TLS        = CFG["Email"].getboolean("MAIL_USE_TLS"),
+    MAIL_USERNAME       = CFG["Email"]["MAIL_USERNAME"],
+    MAIL_PASSWORD       = CFG["Email"]["MAIL_PASSWORD"],
+    MAIL_DEFAULT_SENDER = CFG["Email"]["MAIL_DEFAULT_SENDER"],
+    RECAPTCHA_SITE_KEY  = CFG["ReCAPTCHA"].get("SITE_KEY", ""),
+    RECAPTCHA_SECRET_KEY= CFG["ReCAPTCHA"].get("SECRET_KEY", "")
 )
 
-db = SQLAlchemy(app)
+db   = SQLAlchemy(app)
 mail = Mail(app)
-ts = URLSafeTimedSerializer(app.secret_key)
+ts   = URLSafeTimedSerializer(app.secret_key)
 login_mgr = LoginManager(app)
 login_mgr.login_view = "login"
 
 class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-    created = db.Column(db.Integer, default=lambda: int(time.time()))
-    confirm_code = db.Column(db.String(6))
+    id             = db.Column(db.Integer, primary_key=True)
+    username       = db.Column(db.String(80), unique=True, nullable=False)
+    email          = db.Column(db.String(120), unique=True, nullable=False)
+    password       = db.Column(db.String(200), nullable=False)
+    created        = db.Column(db.Integer, default=lambda: int(time.time()))
+    confirm_code   = db.Column(db.String(6))
     confirm_expire = db.Column(db.Integer)
-    confirmed = db.Column(db.Boolean, default=False)
+    confirmed      = db.Column(db.Boolean, default=False)
 
 with app.app_context():
     db.create_all()
@@ -71,19 +71,19 @@ class _F(FlaskForm):
 
 class RegisterForm(_F):
     username = StringField(validators=[DataRequired(), Length(3,20)])
-    email = StringField(validators=[DataRequired(), Email()])
+    email    = StringField(validators=[DataRequired(), Email()])
     password = PasswordField(validators=[DataRequired(), Length(6,30)])
-    confirm = PasswordField(validators=[EqualTo("password")])
-    submit = SubmitField()
+    confirm  = PasswordField(validators=[EqualTo("password")])
+    submit   = SubmitField()
 
 class LoginForm(_F):
-    email = StringField(validators=[DataRequired(), Email()])
+    email    = StringField(validators=[DataRequired(), Email()])
     password = PasswordField(validators=[DataRequired()])
-    submit = SubmitField()
+    submit   = SubmitField()
 
 def verify_recaptcha(tok:str)->bool:
     s = app.config["RECAPTCHA_SECRET_KEY"]
-    if not (s and tok): 
+    if not (s and tok):
         return True
     try:
         r = requests.post(
@@ -122,7 +122,7 @@ def register():
         elif User.query.filter_by(email=e).first():
             flash("此信箱已註冊過","danger")
         else:
-            c = f"{uuid.uuid4().int % 1000000:06d}"
+            c   = f"{uuid.uuid4().int % 1000000:06d}"
             exp = int(time.time()) + 3600
             db.session.add(User(
                 username=u, email=e,
@@ -145,9 +145,9 @@ def register():
 @app.route("/confirm", methods=["GET","POST"])
 def confirm():
     if request.method=="POST":
-        em = request.form["email"].lower().strip()
-        cd = request.form["code"].strip()
-        u = User.query.filter_by(email=em).first()
+        em  = request.form["email"].lower().strip()
+        cd  = request.form["code"].strip()
+        u   = User.query.filter_by(email=em).first()
         now = int(time.time())
         if not u:
             flash("查無此信箱帳號","danger")

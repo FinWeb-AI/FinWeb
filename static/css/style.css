@@ -5,6 +5,41 @@
   --fin-text:#e6edf3;
 }
 
+.controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.controls select,
+.controls button {
+  background: #1e2230;
+  color: #d1d4dc;
+  border: 1px solid #2a2e37;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.controls select:focus,
+.controls button:focus {
+  outline: none;
+  border-color: #2962ff;
+}
+
+.controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chart-container {
+  border: 1px solid #2a2e37;
+  border-radius: 4px;
+  background: #131722;
+}
+
 html,body{
   height:100%; margin:0;
   background:#050b16;

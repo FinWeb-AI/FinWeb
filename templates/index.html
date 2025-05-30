@@ -1,65 +1,79 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard - FinWeb{% endblock %}
-{% block content %}
-<h1>即時行情</h1>
+{% block title %}Dashboard – FinWeb{% endblock %}
 
-<section id="stock-section">
+{% block content %}
+<h1 class="mb-4">即時行情</h1>
+
+<section id="stock-section" class="mb-5">
   <h2>股票</h2>
-  <form id="stock-form">
-    <input type="text" id="stock-symbol" placeholder="輸入代號，例如 TSLA" />
-    <button type="submit">查詢</button>
+  <form id="stock-form" class="d-flex align-items-center">
+    <input type="text" id="stock-symbol" class="form-control w-50" placeholder="輸入代號，例如 TSLA" />
+    <button class="btn btn-primary ms-2">查詢</button>
   </form>
-  <pre id="stock-result">—</pre>
+  <pre id="stock-result" class="mt-2 text-light">—</pre>
 </section>
 
 <section id="crypto-section">
   <h2>加密貨幣</h2>
-  <select id="crypto-select">
-    <option value="">請選擇...</option>
-  </select>
-  <button id="start-btn" disabled>開始更新</button>
-  <button id="download-btn" disabled>下載CSV</button>
-  <canvas id="crypto-chart" width="400" height="200"></canvas>
+  <div class="mb-3">
+    <select id="crypto-select" class="form-select w-auto d-inline-block">
+      <option value="">請選擇...</option>
+    </select>
+    <button id="start-btn" class="btn btn-success ms-2" disabled>開始更新</button>
+    <button id="download-btn" class="btn btn-outline-light ms-2" disabled>下載 CSV</button>
+  </div>
+  <canvas id="crypto-chart" class="border rounded" style="background:#0f1117; width:100%; height:400px;"></canvas>
 </section>
+{% endblock %}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function(){
-  const sel = document.getElementById('crypto-select');
-  const startBtn = document.getElementById('start-btn');
+  const sel         = document.getElementById('crypto-select');
+  const startBtn    = document.getElementById('start-btn');
   const downloadBtn = document.getElementById('download-btn');
-  const ctx = document.getElementById('crypto-chart').getContext('2d');
-  let chart = new Chart(ctx, {
+  const ctx         = document.getElementById('crypto-chart').getContext('2d');
+
+  const chart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: [],
       datasets: [{
         label: 'Price (USD)',
         data: [],
-        fill: false,
-        borderWidth: 1
+        borderColor: '#2962FF',
+        borderWidth: 2,
+        tension: 0.1,
+        pointRadius: 0
       }]
     },
     options: {
       animation: false,
       scales: {
         x: { display: true },
-        y: { beginAtZero: false }
+        y: {
+          beginAtZero: false,
+          ticks: { color: '#D1D4DC' }
+        }
+      },
+      plugins: {
+        legend: { labels: { color: '#D1D4DC' } }
       }
     }
   });
-  let timer;
+
+  let timer = null;
 
   fetch('/api/coins')
-    .then(r=>r.json())
-    .then(list=>{
-      list.forEach(c=>{
-        const o = new Option(c.symbol.toUpperCase()+' – '+c.name, c.id);
-        sel.add(o);
+    .then(r => r.json())
+    .then(list => {
+      list.forEach(c => {
+        sel.add(new Option(`${c.symbol.toUpperCase()} – ${c.name}`, c.id));
       });
-    });
+    })
+    .catch(console.error);
 
-  sel.addEventListener('change', ()=>{
+  sel.addEventListener('change', () => {
     chart.data.labels.length = 0;
     chart.data.datasets[0].data.length = 0;
     chart.update();
@@ -69,17 +83,18 @@ document.addEventListener('DOMContentLoaded', function(){
     startBtn.textContent = '開始更新';
   });
 
-  startBtn.addEventListener('click', ()=>{
-    if(startBtn.textContent==='開始更新'){
-      timer = setInterval(()=>{
+  startBtn.addEventListener('click', () => {
+    if (startBtn.textContent === '開始更新') {
+      timer = setInterval(() => {
         fetch(`/api/crypto_price?id=${sel.value}`)
-          .then(r=>r.json())
-          .then(d=>{
+          .then(r => r.json())
+          .then(d => {
             const t = new Date(d.timestamp);
             chart.data.labels.push(t.toLocaleTimeString());
             chart.data.datasets[0].data.push(d.price);
             chart.update('none');
-          });
+          })
+          .catch(console.error);
       }, 1000);
       startBtn.textContent = '停止更新';
       downloadBtn.disabled = false;
@@ -89,17 +104,24 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
 
-  downloadBtn.addEventListener('click', ()=>{
+  downloadBtn.addEventListener('click', () => {
     const labels = chart.data.labels;
-    const data = chart.data.datasets[0].data;
+    const data   = chart.data.datasets[0].data;
     let csv = 'timestamp,price\n';
-    labels.forEach((lab,i)=>{
+    labels.forEach((lab, i) => {
       csv += `${lab},${data[i]}\n`;
     });
-    const a = document.createElement('a');
-    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    const blob = new Blob([csv], { type:'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
     a.download = `${sel.value}_history.csv`;
     a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  window.addEventListener('resize', () => {
+    chart.resize();
   });
 });
 </script>
