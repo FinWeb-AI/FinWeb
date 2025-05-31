@@ -1,12 +1,11 @@
 from flask import Blueprint, jsonify, request, render_template
-import requests, logging, time, configparser
-from datetime import datetime
+import requests, logging, time, configparser, random, csv, io
+from datetime import datetime, timedelta
 
 CFG = configparser.ConfigParser()
 CFG.read("config.ini", encoding="utf-8")
-AV_API_KEY = CFG.get("AlphaVantage", "API_KEY", fallback="").strip()
-if not AV_API_KEY:
-    raise RuntimeError("請在 config.ini 的 [AlphaVantage] 區段設定 API_KEY")
+AV_KEY   = CFG.get("AlphaVantage", "API_KEY",  fallback="").strip()
+FM_TOKEN = CFG.get("FinMind",      "API_TOKEN",fallback="").strip()
 
 stock_bp = Blueprint("stocks", __name__)
 
@@ -48,311 +47,153 @@ CATEGORY_TO_MEMBERS = {
     ],
 }
 
-price_cache   = {}
-price_backoff = {}
+price_cache, price_backoff   = {}, {}
+history_cache, history_backoff = {}, {}
+PRICE_TTL,  BACKOFF = 10, 5
+HIST_TTL,   HIST_BK = 300, 60
 
-PRICE_CACHE_TTL   = 10
-BACKOFF_DURATION  = 5
+UA = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Mozilla/5.0 (X11; Linux x86_64)",
+    "curl/8.0.1"
+]
 
-history_cache   = {}
-history_backoff = {}
-
-HISTORY_CACHE_TTL = 300
-HISTORY_BACKOFF   = 60
-
-@stock_bp.route("", methods=["GET"])
+@stock_bp.route("")
 def stocks_page():
     return render_template("stocks.html")
 
-@stock_bp.route("/api/stock_category_members", methods=["GET"])
+@stock_bp.route("/api/stock_category_members")
 def api_stock_category_members():
-    category = request.args.get("category", "").strip()
-    members = CATEGORY_TO_MEMBERS.get(category, [])
-
+    cat = request.args.get("category","").strip()
+    members = CATEGORY_TO_MEMBERS.get(cat, [])
     if not members:
-        return jsonify([]), 200
-
-    result_list = []
-    now = time.time()
-
-    for item in members:
-        sym  = item["code"]
-        name = item["name"]
-
-        last_fail = price_backoff.get(sym)
-        if last_fail and (now - last_fail) < BACKOFF_DURATION:
-            result_list.append({
-                "code": sym,
-                "name": name,
-                "price": None,
-                "change": None,
-                "pct": None,
-                "volume": None,
-                "time": None
-            })
-            continue
-
-        cache_entry = price_cache.get(sym)
-        if cache_entry and (now - cache_entry["ts"]) < PRICE_CACHE_TTL:
-            result_list.append(cache_entry["data"])
-            continue
-
-        if sym.endswith(".TW"):
-            tws_code = sym.replace(".TW", "")
-            exchange = "tse"
-        else:
-            tws_code = sym.replace(".TWO", "")
-            exchange = "otc"
-
-        url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={exchange}_{tws_code}.tw"
+        return jsonify([]),200
+    out, now = [], time.time()
+    for m in members:
+        sym, name = m["code"], m["name"]
+        if price_backoff.get(sym) and now-price_backoff[sym] < BACKOFF:
+            out.append(_null_price(sym, name)); continue
+        if sym in price_cache and now-price_cache[sym]["ts"] < PRICE_TTL:
+            out.append(price_cache[sym]["data"]); continue
         try:
-            resp = requests.get(url, timeout=5)
-            resp.raise_for_status()
-            j = resp.json()
-            arr = j.get("msgArray", [])
-
-            if not arr:
-                data = {
-                    "code": sym,
-                    "name": name,
-                    "price": None,
-                    "change": None,
-                    "pct": None,
-                    "volume": None,
-                    "time": None
-                }
-            else:
-                info = arr[0]
-                price_str  = info.get("z")   or ""
-                prev_str   = info.get("y")   or ""
-                volume_str = info.get("tv")  or "0"
-                time_str   = info.get("t")   or ""
-
-                if not price_str or price_str in ["-", "--"]:
-                    data = {
-                        "code": sym,
-                        "name": name,
-                        "price": None,
-                        "change": None,
-                        "pct": None,
-                        "volume": None,
-                        "time": None
-                    }
-                else:
-                    price  = float(price_str.replace(",", ""))
-                    prev   = float(prev_str.replace(",", "")) if prev_str not in ["", "-", "--"] else 0.0
-                    volume = int(volume_str.replace(",", "")) if volume_str not in ["", "-", "--"] else 0
-
-                    change = round(price - prev, 2)
-                    pct    = round((change / prev) * 100, 2) if prev != 0 else 0.0
-
-                    data = {
-                        "code": sym,
-                        "name": name,
-                        "price": price,
-                        "change": change,
-                        "pct": pct,
-                        "volume": volume,
-                        "time": time_str
-                    }
-
-            price_cache[sym] = {"ts": now, "data": data}
+            data = _fetch_twse_price(sym, name)
+            price_cache[sym] = {"ts":now,"data":data}
             price_backoff.pop(sym, None)
-
-        except requests.exceptions.HTTPError as e:
-            logging.error(f"[stock_category_members][{sym}] HTTPError: {e} – {resp.text}")
-            if resp.status_code == 429:
-                price_backoff[sym] = now
-            data = {
-                "code": sym,
-                "name": name,
-                "price": None,
-                "change": None,
-                "pct": None,
-                "volume": None,
-                "time": None
-            }
-
         except Exception as e:
-            logging.error(f"[stock_category_members][{sym}] Exception: {e}")
+            logging.warning(f"[price] {sym} {e}")
             price_backoff[sym] = now
-            data = {
-                "code": sym,
-                "name": name,
-                "price": None,
-                "change": None,
-                "pct": None,
-                "volume": None,
-                "time": None
-            }
+            data = _null_price(sym, name)
+        out.append(data)
+    return jsonify(out),200
 
-        result_list.append(data)
-
-    return jsonify(result_list), 200
-
-@stock_bp.route("/api/stock_price", methods=["GET"])
+@stock_bp.route("/api/stock_price")
 def api_stock_price():
-    symbol = request.args.get("symbol", "").strip()
-    if not symbol:
-        return jsonify({"error": "symbol 參數為必要"}), 400
-
-    now = time.time()
-    last_fail = price_backoff.get(symbol)
-    if last_fail and (now - last_fail) < BACKOFF_DURATION:
-        return jsonify({"error": "Too Many Requests"}), 429
-
-    cache_entry = price_cache.get(symbol)
-    if cache_entry and (now - cache_entry["ts"]) < PRICE_CACHE_TTL:
-        return jsonify(cache_entry["data"]), 200
-
-    if symbol.endswith(".TW"):
-        tws_code = symbol.replace(".TW", "")
-        exchange = "tse"
-    else:
-        tws_code = symbol.replace(".TWO", "")
-        exchange = "otc"
-
-    url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={exchange}_{tws_code}.tw"
+    sym = request.args.get("symbol","").strip()
+    if not sym:
+        return jsonify({"error":"symbol needed"}),400
+    now=time.time()
+    if price_backoff.get(sym) and now-price_backoff[sym] < BACKOFF:
+        return jsonify({"error":"Too Many"}),429
+    if sym in price_cache and now-price_cache[sym]["ts"] < PRICE_TTL:
+        return jsonify(price_cache[sym]["data"]),200
     try:
-        resp = requests.get(url, timeout=5)
-        resp.raise_for_status()
-        arr = resp.json().get("msgArray", [])
-        if not arr:
-            return jsonify({"error": "no data"}), 404
-
-        info = arr[0]
-        price_str  = info.get("z")   or ""
-        prev_str   = info.get("y")   or ""
-        volume_str = info.get("tv")  or "0"
-        time_str   = info.get("t")   or ""
-
-        if not price_str or price_str in ["-", "--"]:
-            return jsonify({"error": "no price"}), 404
-
-        price  = float(price_str.replace(",", ""))
-        prev   = float(prev_str.replace(",", "")) if prev_str not in ["", "-", "--"] else 0.0
-        volume = int(volume_str.replace(",", "")) if volume_str not in ["", "-", "--"] else 0
-
-        change = round(price - prev, 2)
-        pct    = round((change / prev) * 100, 2) if prev != 0 else 0.0
-
-        data = {
-            "code": symbol,
-            "price": price,
-            "change": change,
-            "pct": pct,
-            "volume": volume,
-            "time": time_str
-        }
-
-        price_cache[symbol] = {"ts": now, "data": data}
-        price_backoff.pop(symbol, None)
-        return jsonify(data), 200
-
-    except requests.exceptions.HTTPError as e:
-        logging.error(f"[stock_price] HTTPError: {e} – {resp.text}")
-        if resp.status_code == 429:
-            price_backoff[symbol] = now
-            return jsonify({"error": "Too Many Requests"}), 429
-        return jsonify({"error": "service error"}), 500
-
+        data = _fetch_twse_price(sym, sym)
+        price_cache[sym]={"ts":now,"data":data}
+        return jsonify(data),200
     except Exception as e:
-        logging.error(f"[stock_price] Exception: {e}")
-        price_backoff[symbol] = now
-        return jsonify({"error": str(e)}), 500
+        logging.warning(f"[price] {sym} {e}")
+        price_backoff[sym]=now
+        return jsonify({"error":"service"}),500
 
-@stock_bp.route("/api/stock_history", methods=["GET"])
+@stock_bp.route("/api/stock_history")
 def api_stock_history():
-    symbol = request.args.get("symbol", "").strip()
-    ival   = request.args.get("interval", "5min").strip()
-
-    if not symbol:
-        return jsonify({"error": "symbol 參數為必要"}), 400
-
-    av_symbol = symbol
-
-    now = time.time()
-
-    last_fail = history_backoff.get(symbol)
-    if last_fail and (now - last_fail) < HISTORY_BACKOFF:
-        return jsonify({"error": "Too Many Requests (backoff)"}), 429
-
-    cache_entry = history_cache.get(symbol)
-    if cache_entry and (now - cache_entry["ts"]) < HISTORY_CACHE_TTL:
-        return jsonify({
-            "symbol": symbol,
-            "timestamps": cache_entry["timestamps"],
-            "prices": cache_entry["prices"]
-        }), 200
-
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "TIME_SERIES_INTRADAY",
-        "symbol": av_symbol,
-        "interval": ival,
-        "outputsize": "full",
-        "apikey": AV_API_KEY
-    }
-
+    sym   = request.args.get("symbol","").strip()
+    ival  = request.args.get("interval","5min").strip()
+    if not sym: return jsonify({"error":"symbol needed"}),400
+    now=time.time()
+    if history_backoff.get(sym) and now-history_backoff[sym] < HIST_BK:
+        return jsonify({"error":"Too Many"}),429
+    if sym in history_cache and now-history_cache[sym]["ts"] < HIST_TTL:
+        h=history_cache[sym]; return jsonify(h),200
+    yf_int = ival.replace("min","m")
     try:
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-        j = resp.json()
-
-        if "Note" in j and "Thank you for using Alpha Vantage" in j["Note"]:
-            history_backoff[symbol] = now
-            return jsonify({"error": "Too Many Requests"}), 429
-
-        if "Error Message" in j:
-            return jsonify({"error": j["Error Message"]}), 404
-
-        key_name = f"Time Series ({ival})"
-        time_series = j.get(key_name, {})
-
-        if not time_series:
-            return jsonify({"error": "無歷史資料"}), 404
-
-        sorted_datetimes = sorted(time_series.keys())
-        timestamps = []
-        prices     = []
-
-        for dt_str in sorted_datetimes:
+        ts,pr = _yahoo(sym,yf_int)
+    except Exception as e1:
+        try:
+            ts,pr = _alpha(sym,yf_int)
+        except Exception as e2:
             try:
-                dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
-                timestamps.append(dt.strftime("%H:%M"))
-            except:
-                timestamps.append(dt_str)
+                ts,pr = _finmind(sym,yf_int)
+            except Exception as e3:
+                logging.warning(f"[history] {sym} yahoo:{e1} av:{e2} fm:{e3}")
+                history_backoff[sym]=now
+                return jsonify({"error":"no history"}),404
+    history_cache[sym]={"ts":now,"symbol":sym,"timestamps":ts,"prices":pr}
+    history_backoff.pop(sym,None)
+    return jsonify({"symbol":sym,"timestamps":ts,"prices":pr}),200
 
-            close_price = time_series[dt_str].get("4. close", None)
-            try:
-                prices.append(float(close_price))
-            except:
-                prices.append(0.0)
+# ---------- helpers ----------
+def _null_price(code,name):
+    return dict(code=code,name=name,price=None,change=None,pct=None,volume=None,time=None)
 
-        history_cache[symbol] = {
-            "ts": now,
-            "timestamps": timestamps,
-            "prices": prices
-        }
-        history_backoff.pop(symbol, None)
+def _fetch_twse_price(sym,name):
+    ex,tws = ("tse",sym.replace(".TW","")) if sym.endswith(".TW") else ("otc",sym.replace(".TWO",""))
+    r = requests.get(f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={ex}_{tws}.tw", timeout=5)
+    r.raise_for_status()
+    arr = r.json().get("msgArray",[])
+    if not arr: return _null_price(sym,name)
+    info = arr[0]
+    z,pv,vol,t = info.get("z",""),info.get("y",""),info.get("tv","0"),info.get("t","")
+    if z in ["","-","--"]:
+        z = pv
+    if z in ["","-","--"]:
+        return _null_price(sym,name)
+    price=float(z.replace(",","")); prev=float(pv.replace(",","")) if pv not in ["","-","--"] else price
+    ch=round(price-prev,2); pct=round(ch/prev*100,2) if prev else 0
+    return dict(code=sym,name=name,price=price,change=ch,pct=pct,volume=int(vol.replace(",","")),time=t)
 
-        return (
-            jsonify({
-                "symbol": symbol,
-                "timestamps": timestamps,
-                "prices": prices
-            }),
-            200
-        )
+def _yahoo(sym,iv):
+    hdr={"User-Agent":random.choice(UA)}
+    r=requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}",params={"range":"1d","interval":iv,"indicators":"quote"},headers=hdr,timeout=10)
+    if r.status_code==429: raise RuntimeError("yahoo 429")
+    r.raise_for_status()
+    j=r.json()
+    res=j["chart"]["result"][0]
+    ts=res.get("timestamp",[]); cl=res["indicators"]["quote"][0].get("close",[])
+    if not ts or not cl: raise RuntimeError("yahoo empty")
+    out_t,out_p=[],[]
+    for t,p in zip(ts,cl):
+        if p is None: continue
+        dt=datetime.fromtimestamp(t)+timedelta(hours=8)
+        out_t.append(dt.strftime("%H:%M")); out_p.append(round(float(p),3))
+    return out_t,out_p
 
-    except requests.exceptions.HTTPError as e:
-        logging.error(f"[stock_history] HTTPError: {e} – {resp.text}")
-        if resp.status_code == 429:
-            history_backoff[symbol] = now
-            return jsonify({"error": "Too Many Requests"}), 429
-        return jsonify({"error": "AlphaVantage API error"}), 500
+def _alpha(sym,iv):
+    if not AV_KEY: raise RuntimeError("av skip")
+    avs = f"TSE:{sym.replace('.TW','')}" if sym.endswith(".TW") else f"OTC:{sym.replace('.TWO','')}"
+    r=requests.get("https://www.alphavantage.co/query",params={"function":"TIME_SERIES_INTRADAY","symbol":avs,"interval":iv,"outputsize":"compact","apikey":AV_KEY},timeout=10)
+    if r.status_code==429: raise RuntimeError("av 429")
+    j=r.json(); k=f"Time Series ({iv})"
+    d=j.get(k,{})
+    if not d: raise RuntimeError("av empty")
+    out_t,out_p=[],[]
+    for dt_str in sorted(d.keys())[-288:]:
+        dt=datetime.strptime(dt_str,"%Y-%m-%d %H:%M:%S")+timedelta(hours=8)
+        out_t.append(dt.strftime("%H:%M")); out_p.append(round(float(d[dt_str]['4. close']),3))
+    return out_t,out_p
 
-    except Exception as e:
-        logging.error(f"[stock_history] Exception: {e}")
-        history_backoff[symbol] = now
-        return jsonify({"error": str(e)}), 500
+def _finmind(sym,iv):
+    if not FM_TOKEN: raise RuntimeError("fm skip")
+    code=sym.replace(".TW","").replace(".TWO","")
+    start=(datetime.today()-timedelta(days=1)).strftime("%Y-%m-%d")
+    r=requests.get("https://api.finmindtrade.com/api/v4/data",params={"dataset":"TaiwanStockPriceMinute","data_id":code,"start_date":start,"token":FM_TOKEN},timeout=10)
+    if r.status_code==429: raise RuntimeError("fm 429")
+    d=r.json().get("data",[])
+    if not d: raise RuntimeError("fm empty")
+    step=int(iv.replace("m",""))
+    out_t,out_p=[],[]
+    for row in d:
+        t=datetime.strptime(row["datetime"],"%Y-%m-%d %H:%M:%S")
+        if t.minute%step: continue
+        out_t.append(t.strftime("%H:%M")); out_p.append(round(float(row["close"]),3))
+    return out_t[-288:],out_p[-288:]
