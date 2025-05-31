@@ -23,7 +23,7 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 
-app.register_blueprint(stock_bp)
+app.register_blueprint(stock_bp, url_prefix="/stocks")
 
 Talisman(app, force_https=True, content_security_policy=None)
 
