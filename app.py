@@ -29,7 +29,7 @@ except Exception:
         
 CFG = configparser.ConfigParser()
 CFG.read("config.ini", encoding="utf-8")
-
+# load資料庫路徑，並確保目錄存在
 DB_PATH = Path(CFG["DEFAULT"]["DB_PATH"]).resolve()
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -37,10 +37,10 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("SECRET_KEY", os.urandom(32).hex())
 app.register_blueprint(stock_bp, url_prefix="/stocks")
 Talisman(app, force_https=True, content_security_policy=None)
-
+# 設定 CSP 為 None 以允許所有資源載入
 limiter = Limiter(key_func=get_remote_address,
                   default_limits=["200 per day", "50 per hour"], app=app)
-
+# 設定速率限制器，預設每天200次，每小時50次
 app.config.update(
     SQLALCHEMY_DATABASE_URI        = f"sqlite:///{DB_PATH}",
     SQLALCHEMY_TRACK_MODIFICATIONS = False,
@@ -56,7 +56,7 @@ app.config.update(
     WTF_CSRF_ENABLED    = False,
     SESSION_COOKIE_SECURE = False
 )
-
+# PEPPER 用於密碼加複雜，確保安全性
 PEPPER = (CFG.get("Security","PEPPER",
           fallback=os.getenv("PW_PEPPER","super-secret-pepper"))).encode()
 
@@ -77,7 +77,7 @@ def _unauth():
         flash("請先登入", "warning")
         session["_unauth_flash_ts"] = now
     return redirect(url_for("login", next=request.url))
-
+#創建SQLite資料庫
 class User(UserMixin, db.Model):
     id            = db.Column(db.Integer, primary_key=True)
     username      = db.Column(db.String(80),  unique=True, nullable=False)
@@ -114,7 +114,7 @@ def load_user(uid:str)->User|None:
 
 class _F(FlaskForm):
     class Meta: csrf=False
-
+# 這邊定義了註冊和登入表單的欄位和驗證規則
 class RegisterForm(_F):
     username = StringField(validators=[DataRequired(),Length(3,20)])
     email    = StringField(validators=[DataRequired(),Email()])
@@ -135,7 +135,7 @@ def verify_recaptcha(tok:str)->bool:
                         data={"secret":secret,"response":tok},timeout=4)
         return r.json().get("success",False)
     except: return False
-
+# 設定驗證碼發送函式
 def send_verification_email(user:User):
     link = url_for("confirm", _external=True)
     body = f"親愛的 {user.username} 您好：\n\n" \
@@ -177,7 +177,7 @@ def ai_analysis(): return render_template("ai_analysis.html")
 @app.route("/market-overview")
 @login_required
 def market_overview(): return render_template("market_overview.html")
-
+# 註冊頁面
 @app.route("/register", methods=["GET", "POST"])
 @limiter.limit("5 per minute")
 def register():
@@ -213,7 +213,7 @@ def register():
     return render_template("register.html",
                            form=form,
                            recaptcha_site_key=app.config["RECAPTCHA_SITE_KEY"])
-
+# 確認電子郵件驗證頁面
 @app.route("/confirm", methods=["GET", "POST"])
 def confirm():
     if request.method == "POST":
@@ -238,7 +238,7 @@ def confirm():
             flash("電子郵件驗證完成，請登入", "success")
             return redirect(url_for("login"))
     return render_template("confirm.html")
-
+# 登入頁面
 @app.route("/login", methods=["GET", "POST"])
 @limiter.limit("10 per minute")
 def login():
@@ -253,13 +253,13 @@ def login():
     return render_template("login.html",
                            form=form,
                            recaptcha_site_key=app.config["RECAPTCHA_SITE_KEY"])
-
+# 登出功能
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
     return redirect(url_for("index"))
-
+# 密碼重設頁面
 PRICE_CACHE  = {}; FAIL_PRICE  = {}
 DETAIL_CACHE = {}; FAIL_DETAIL = {}
 OHLC_CACHE   = {}; FAIL_OHLC   = {}
@@ -267,7 +267,7 @@ PRICE_TTL, DETAIL_TTL, OHLC_TTL = 15, 120, 120
 BACKOFF = 60
 def _cached(c,k,t): return k in c and time.time()-c[k]["ts"]<t
 def _backoff(f,k): return time.time()-f.get(k,0)<BACKOFF
-
+# 密碼重設請求頁面
 @app.route("/api/coins")
 def api_coins():
     try:
@@ -280,7 +280,7 @@ def api_coins():
     except Exception as e:
         app.logger.error(f"/api/coins error: {e}")
         return jsonify({"error":"service unavailable"}),503
-
+# 密碼重設請求處理
 @app.route("/api/crypto_price")
 def api_crypto_price():
     cid=(request.args.get("id") or "bitcoin").lower().strip()
@@ -304,7 +304,7 @@ def api_crypto_price():
         FAIL_PRICE[cid]=time.time()
         app.logger.error(f"/api/crypto_price error: {e}")
         return jsonify({"error":"not found"}),200
-
+# 加密貨幣詳細資訊API
 @app.route("/api/crypto_detail")
 def api_crypto_detail():
     cid=(request.args.get("id") or "bitcoin").lower().strip()
@@ -335,7 +335,7 @@ def api_crypto_detail():
         FAIL_DETAIL[cid]=time.time()
         app.logger.error(f"/api/crypto_detail error: {e}")
         return jsonify({"error":"not found"}),200
-
+# 加密貨幣OHLC數據API
 @app.route("/api/ohlc")
 def api_ohlc():
     cid=(request.args.get("id") or "bitcoin").lower().strip()
@@ -366,7 +366,7 @@ You are FinWeb AI Financial Assistant, a professional financial analyst and mark
   – 必要時給出數據、定義、參考範圍與時間點
 • 以繁體中文回答，保留專有名詞英語。
 """.strip()
-
+# Gemini AI 聊天 API
 @app.route("/api/chat",methods=["POST"])
 @login_required
 def api_chat():
