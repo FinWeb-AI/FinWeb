@@ -134,6 +134,19 @@
     </div>
   </nav>
 
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      <div class="position-fixed top-0 start-50 translate-middle-x mt-3" style="z-index:1080;max-width:480px;">
+        {% for cat, msg in msgs %}
+          <div class="alert alert-{{ cat }} alert-dismissible fade show shadow mb-2" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
   <main class="container pt-5 mt-4 animate__animated animate__fadeIn">
     {% block content %}{% endblock %}
   </main>

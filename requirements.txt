@@ -12,3 +12,7 @@ email_validator>=2.1.0
 flask_limiter.util
 flask_limiter
 flask_talisman
+passlib[argon2] 
+pyotp 
+qrcode 
+pillow
