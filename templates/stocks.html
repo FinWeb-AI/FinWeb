@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}股票走勢查詢（批次即時價） – FinWeb{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">股票走勢查詢（批次即時價）</h1>
+
+<div class="row gy-4">
+  <div class="col-lg-3">
+    <div class="card bg-dark text-light mb-3">
+      <div class="card-header">台股上市類股</div>
+      <ul class="list-group list-group-flush bg-dark">
+        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
+            data-category="上市_電子零組件">電子零組件</li>
+        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
+            data-category="上市_半導體">半導體</li>
+        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
+            data-category="上市_光電">光電</li>
+        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
+            data-category="上市_電子通路">電子通路</li>
+      </ul>
+    </div>
+
+    <div class="card bg-dark text-light">
+      <div class="card-header">台股上櫃類股</div>
+      <ul class="list-group list-group-flush bg-dark">
+        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
+            data-category="上櫃_光電">光電</li>
+        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
+            data-category="上櫃_生技">生技</li>
+        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
+            data-category="上櫃_半導體">半導體</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-lg-9">
+    <div class="card bg-dark text-light mb-4">
+      <div id="members-header" class="card-header">
+        請先點選左側「類股」
+      </div>
+      <div class="card-body p-2" style="max-height: 60vh; overflow-y: auto;">
+        <table id="members-table" class="table table-dark table-striped table-hover mb-0">
+          <thead>
+            <tr>
+              <th scope="col">股票名稱／代號</th>
+              <th scope="col">股價</th>
+              <th scope="col">漲跌</th>
+              <th scope="col">漲跌幅(%)</th>
+              <th scope="col">成交量</th>
+              <th scope="col">時間</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colspan="6" class="text-center text-muted">
+                尚未選擇類股
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const categoryEls   = document.querySelectorAll(".category-item");
+  const membersHeader = document.getElementById("members-header");
+  const tbodyEl       = document.querySelector("#members-table tbody");
+
+  categoryEls.forEach(li => {
+    li.addEventListener("click", async () => {
+      categoryEls.forEach(x => x.classList.remove("active"));
+      li.classList.add("active");
+
+      const category = li.dataset.category; 
+      membersHeader.textContent = `${category.replace(/_/g, " / ")} 成分股列表`;
+
+      tbodyEl.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center text-light">載入中…請稍候</td>
+        </tr>
+      `;
+
+      try {
+        const resp = await fetch(`/api/stock_category_members?category=${encodeURIComponent(category)}`);
+        if (!resp.ok) throw new Error(`status ${resp.status}`);
+        const data = await resp.json();
+
+        if (!Array.isArray(data) || data.length === 0) {
+          tbodyEl.innerHTML = `
+            <tr>
+              <td colspan="6" class="text-center text-warning">
+                此類股尚無成分股或無法取得資料
+              </td>
+            </tr>`;
+          return;
+        }
+
+        tbodyEl.innerHTML = data.map(item => {
+          const priceStr  = (item.price  !== null && item.price  !== undefined) ? item.price.toLocaleString() : "—";
+          const changeStr = (item.change !== null && item.change !== undefined)
+                            ? (item.change >= 0 
+                                ? `▲ ${item.change.toLocaleString()}` 
+                                : `▼ ${Math.abs(item.change).toLocaleString()}`)
+                            : "—";
+          const pctStr    = (item.pct    !== null && item.pct    !== undefined)
+                            ? (item.pct >= 0 
+                                ? `▲ ${item.pct.toFixed(2)}%` 
+                                : `▼ ${Math.abs(item.pct).toFixed(2)}%`)
+                            : "—";
+          const volStr    = (item.volume !== null && item.volume !== undefined) 
+                            ? item.volume.toLocaleString() 
+                            : "—";
+          const timeStr   = item.time || "—";
+
+          let colorClass = "";
+          if (item.change !== null && item.change !== undefined) {
+            colorClass = (item.change >= 0) ? "text-success" : "text-danger";
+          }
+
+          return `
+            <tr>
+              <td>
+                ${item.name}
+                <small class="text-secondary">(${item.code})</small>
+              </td>
+              <td>${priceStr}</td>
+              <td class="${colorClass}">${changeStr}</td>
+              <td class="${colorClass}">${pctStr}</td>
+              <td>${volStr}</td>
+              <td>${timeStr}</td>
+            </tr>
+          `;
+        }).join("");
+
+      } catch (err) {
+        console.error("[stock_category_members] 錯誤", err);
+        tbodyEl.innerHTML = `
+          <tr>
+            <td colspan="6" class="text-center text-danger">
+              載入成分股失敗：${err.message || err}
+            </td>
+          </tr>`;
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

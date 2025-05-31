@@ -1,10 +1,7 @@
 from __future__ import annotations
 import os, uuid, logging, configparser, requests, time, re, hashlib, hmac
 from pathlib import Path
-from flask import (
-    Flask, render_template, request, redirect, url_for,
-    jsonify, flash, abort
-)
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user
 from flask_mail import Mail, Message
@@ -15,6 +12,7 @@ from wtforms.validators import DataRequired, Email, EqualTo, Length
 from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from stocks import stock_bp
 
 CFG = configparser.ConfigParser()
 CFG.read("config.ini", encoding="utf-8")
@@ -25,14 +23,17 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 
+app.register_blueprint(stock_bp)
+
 Talisman(app, force_https=True, content_security_policy=None)
 
+#這邊限制api速率 反爬蟲的東西
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=["200 per day", "50 per hour"],
     app=app
 )
-
+# 這邊是flask相關的設定 有安全驗證 email之類的
 app.config.update(
     SQLALCHEMY_DATABASE_URI        = f"sqlite:///{DB_PATH}",
     SQLALCHEMY_TRACK_MODIFICATIONS = False,
@@ -45,7 +46,7 @@ app.config.update(
     RECAPTCHA_SITE_KEY             = CFG["ReCAPTCHA"].get("SITE_KEY",""),
     RECAPTCHA_SECRET_KEY           = CFG["ReCAPTCHA"].get("SECRET_KEY","")
 )
-
+#下面跟資料庫有關 是用SQLite
 db   = SQLAlchemy(app)
 mail = Mail(app)
 ts   = URLSafeTimedSerializer(app.secret_key)
@@ -102,6 +103,16 @@ def block_bad_ua():
     ua = request.headers.get("User-Agent","").lower()
     if re.search(r"curl|python-requests|scrapy", ua):
         abort(403)
+
+@app.route("/stocks")
+@login_required
+def stocks():
+    return render_template("stocks.html")
+
+@app.route("/crypto")
+@login_required
+def crypto():
+    return render_template("index.html")
 
 @app.route("/")
 def index():
@@ -368,6 +379,7 @@ def api_chat():
     except Exception as e:
         logging.error(f"/api/chat error: {e}")
         return jsonify({"reply":"AI 回覆錯誤，請稍後再試。"}), 200
+
 
 if __name__ == "__main__":
     logging.basicConfig(
