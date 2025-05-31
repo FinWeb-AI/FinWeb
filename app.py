@@ -198,6 +198,7 @@ def confirm():
             return redirect(url_for("login"))
     return render_template("confirm.html")
 
+#註冊 用到哈希加密 hmac等技術
 @app.route("/login", methods=["GET","POST"])
 @limiter.limit("10 per minute")
 def login():
