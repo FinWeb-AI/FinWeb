@@ -96,3 +96,16 @@ body::before{
   padding:.5rem 1rem;
 }
 .chat-iframe{flex:1;border:none}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+
+  height: 500px;
+  overflow: hidden;
+}
+
+.chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}

@@ -30,7 +30,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from passlib.hash import argon2
 from sqlalchemy import text
-
+import yfinance as yf
 import google.generativeai as genai
 
 from stocks import stock_bp
@@ -444,6 +444,80 @@ def api_ohlc():
         FAIL_OHLC[key] = time.time()
         app.logger.error(f"/api_ohlc error: {e}")
         return jsonify({"error":"not found"}), 200
+
+@app.route("/api/market_summary")
+@login_required
+def api_market_summary():
+    """
+    回傳 JSON 格式：
+    {
+      "S&P 500":    {"price": 4500.12, "change_pct": -0.32},
+      "NASDAQ":     {"price": 15000.45, "change_pct": +1.23},
+      "FTSE 100":   {"price": 7600.34, "change_pct": -0.45},
+      ...
+    }
+    其中「price」是最新價，「change_pct」是相對於前一交易日收盤價的百分比漲跌（可正可負）。
+    """
+    symbols_map = {
+
+        "S&P 500":    "^GSPC",
+        "NASDAQ":     "^IXIC",
+        "FTSE 100":   "^FTSE",
+        "DOW JONES":  "^DJI",
+        "NIKKEI":     "^N225",
+        "DAX":        "^GDAXI",
+        "CAC 40":     "^FCHI",
+        "Hang Seng":  "^HSI",
+        # 大宗商品
+        "Gold":       "GC=F",
+        "Crude Oil":  "CL=F",
+        "Copper":     "HG=F",
+        "Silver":     "SI=F",
+        "Natural Gas":"NG=F",
+        "Platinum":   "PL=F",
+        "Palladium":  "PA=F",
+        # 匯率
+        "USD/TWD":    "USDTWD=X",
+        "EUR/USD":    "EURUSD=X",
+        "USD/JPY":    "USDJPY=X",
+        "GBP/USD":    "GBPUSD=X",
+        "AUD/USD":    "AUDUSD=X",
+        "USD/CNY":    "USDCNY=X",
+        "USD/SGD":    "USDSGD=X"
+    }
+
+    summary = {}
+    for name, ticker in symbols_map.items():
+        try:
+            tk = yf.Ticker(ticker)
+            if hasattr(tk, "fast_info") and tk.fast_info:
+                info = tk.fast_info
+                price = info.get("last_price")
+                prev_close = info.get("previous_close")
+            else:
+                info = tk.info or {}
+                price = info.get("regularMarketPrice")
+                prev_close = info.get("regularMarketPreviousClose") or info.get("previousClose")
+
+            if price is None or prev_close is None:
+                hist = tk.history(period="2d", interval="1d")
+                if not hist.empty and len(hist["Close"]) >= 2:
+                    prev_close = float(hist["Close"].iloc[-2])
+                    price = float(hist["Close"].iloc[-1])
+
+            if price is not None and prev_close is not None and prev_close != 0:
+                change_pct = (price - prev_close) / prev_close * 100
+            else:
+                change_pct = 0.0
+
+            summary[name] = {
+                "price": round(price, 2) if price is not None else None,
+                "change_pct": round(change_pct, 2)
+            }
+        except Exception as e:
+            summary[name] = {"price": None, "change_pct": None}
+
+    return jsonify(summary)
 
 # Gemini AI 投資助理：呼叫 gemini-1.5-flash-latest
 SYSTEM_PROMPT = """

@@ -1,46 +1,1186 @@
 {% extends 'base.html' %}
 {% block title %}市場概覽 - FinWeb{% endblock %}
 
+{% block styles %}
+  <!-- Bootstrap 5 CSS（若 base.html 已載入可略過這行） -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    body {
+      background-color: #18191f;
+      color: #e6e8eb;
+    }
+    .text-white-secondary {
+      color: #adb5bd !important;
+    }
+
+    /* 卡片（深色主題） */
+    .card-dark {
+      background-color: #242632;
+      border: none;
+      border-radius: 0.25rem;
+      color: #e6e8eb;
+    }
+    .card-dark .card-body {
+      padding: 0.75rem 1rem;
+    }
+    .card-dark .card-title {
+      color: #f1f3f5;
+      margin-bottom: 0.25rem;
+      font-size: 0.875rem;
+    }
+    .card-dark h3 {
+      font-size: 1.5rem;
+      margin: 0;
+      color: #ffffff;
+    }
+    .card-dark small {
+      color: #adb5bd;
+    }
+
+    /* 漲＝綠、跌＝紅、持平＝灰 */
+    .value-up {
+      color: #28a745 !important;
+    }
+    .value-down {
+      color: #dc3545 !important;
+    }
+    .value-flat {
+      color: #adb5bd !important;
+    }
+    .arrow-up {
+      color: #28a745 !important;
+      font-size: 1.2rem;
+      line-height: 1;
+    }
+    .arrow-down {
+      color: #dc3545 !important;
+      font-size: 1.2rem;
+      line-height: 1;
+    }
+    .arrow-flat {
+      color: #adb5bd !important;
+      font-size: 1.2rem;
+      line-height: 1;
+    }
+
+    /* 時間範圍下拉選單 & 按鈕 */
+    .time-range-select {
+      max-width: 260px;
+      background-color: #242632;
+      color: #edf1f5;
+      border: 1px solid #3a3d4e;
+    }
+    .time-range-select option {
+      background-color: #2b2b38;
+      color: #edf1f5;
+    }
+    .time-range-select:focus {
+      border-color: #0d6efd !important;
+      box-shadow: 0 0 0 0.1rem rgba(13,110,253,0.25);
+      outline: none;
+    }
+    #resetZoomBtn,
+    #clockDisplay {
+      background-color: #3a3d4e;
+      color: #edf1f5;
+      border: 1px solid #3a3d4e;
+    }
+    #resetZoomBtn:hover,
+    #clockDisplay:hover {
+      background-color: #484b59;
+      border-color: #484b59;
+      color: #ffffff;
+    }
+    #clockDisplay {
+      cursor: default;
+    }
+
+    /* 折線圖容器 */
+    .chart-container {
+      position: relative;
+      width: 100%;
+      height: 440px;
+      background-color: #1f222b;
+      border-radius: 0.25rem;
+      padding: 0.5rem;
+    }
+    .chart-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* Accordion 深色樣式 */
+    .accordion-button {
+      background-color: #242632;
+      color: #e6e8eb;
+    }
+    .accordion-button:not(.collapsed) {
+      background-color: #2b2b38;
+      color: #ffffff;
+      box-shadow: inset 0 -1px 0 rgb(255 255 255 / 13%);
+    }
+    .accordion-body {
+      background-color: #242632;
+      color: #e6e8eb;
+    }
+    .form-check-input:checked {
+      background-color: #0d6efd;
+      border-color: #0d6efd;
+    }
+    .form-check-input {
+      background-color: #18191f;
+      border: 1px solid #3a3d4e;
+    }
+    .form-check-input:focus {
+      border-color: #0d6efd;
+      box-shadow: 0 0 0 0.1rem rgba(13,110,253,0.25);
+    }
+    .form-switch .form-check-input {
+      width: 2rem;
+      height: 1rem;
+    }
+    .form-switch .form-check-input:checked {
+      background-color: #0d6efd;
+    }
+    .form-switch .form-check-label {
+      margin-left: 0.75rem;
+    }
+
+    /* 滾動條 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background-color: #3a3d4e;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background-color: #18191f;
+    }
+  </style>
+{% endblock %}
+
+
 {% block content %}
-<h1 class="mb-4">市場概覽</h1>
+<div class="container-fluid py-4">
 
-<section class="card-block">
-  <canvas id="global-chart" height="200"></canvas>
-  <p class="mt-3">這邊會載入全球指數／大宗商品／匯率等折線圖，並每分鐘更新。</p>
-</section>
+  <div class="row mb-4">
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <div class="col-12 col-md-3 mb-2 mb-md-0">
+      <button id="clockDisplay" class="btn btn-sm w-100">--:--:--</button>
+    </div>
 
-<script>
-{% raw %}
-  // 這邊折線圖 但還沒設計好
-  document.addEventListener('DOMContentLoaded', () => {
-    const ctx = document.getElementById('global-chart').getContext('2d');
+    <div class="col-12 col-md-9">
+      <ul class="nav nav-tabs nav-fill mb-3" id="summaryTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-index" data-bs-toggle="tab" data-bs-target="#pane-index" type="button" role="tab" aria-controls="pane-index" aria-selected="true">
+            全球指數
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-commodity" data-bs-toggle="tab" data-bs-target="#pane-commodity" type="button" role="tab" aria-controls="pane-commodity" aria-selected="false">
+            大宗商品
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-forex" data-bs-toggle="tab" data-bs-target="#pane-forex" type="button" role="tab" aria-controls="pane-forex" aria-selected="false">
+            匯率
+          </button>
+        </li>
+      </ul>
+      <div class="tab-content" id="summaryTabsContent">
 
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: Array.from({ length: 20 }, (_, i) => `T-${20 - i}`),
-        datasets: [{
-          label: 'S&P 500',
-          tension: 0.3,
-          borderWidth: 2,
-          fill: false,
-          data: Array.from({ length: 20 }, () => Math.random() * 100 + 4000)
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { display: false }
-        },
-        scales: {
-          x: { ticks: { color: '#e6edf3' }, grid: { display: false } },
-          y: { ticks: { color: '#e6edf3' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+        <div class="tab-pane fade show active" id="pane-index" role="tabpanel" aria-labelledby="tab-index">
+          <div class="row g-3">
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">S&amp;P 500</h6>
+                    <h3 id="value-sp500">—</h3>
+                    <small id="chg-sp500" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-sp500" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">NASDAQ</h6>
+                    <h3 id="value-nasdaq">—</h3>
+                    <small id="chg-nasdaq" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-nasdaq" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">FTSE 100</h6>
+                    <h3 id="value-ftse100">—</h3>
+                    <small id="chg-ftse100" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-ftse100" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">DOW JONES</h6>
+                    <h3 id="value-dowjones">—</h3>
+                    <small id="chg-dowjones" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-dowjones" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">NIKKEI</h6>
+                    <h3 id="value-nikkei">—</h3>
+                    <small id="chg-nikkei" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-nikkei" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">DAX</h6>
+                    <h3 id="value-dax">—</h3>
+                    <small id="chg-dax" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-dax" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">CAC 40</h6>
+                    <h3 id="value-cac40">—</h3>
+                    <small id="chg-cac40" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-cac40" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">Hang Seng</h6>
+                    <h3 id="value-hangseng">—</h3>
+                    <small id="chg-hangseng" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-hangseng" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="pane-commodity" role="tabpanel" aria-labelledby="tab-commodity">
+          <div class="row g-3">
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">黃金 (Gold, USD/oz)</h6>
+                    <h3 id="value-gold">—</h3>
+                    <small id="chg-gold" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-gold" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">原油 (Crude Oil, USD/barrel)</h6>
+                    <h3 id="value-oil">—</h3>
+                    <small id="chg-oil" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-oil" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">銅 (Copper, USD/lb)</h6>
+                    <h3 id="value-copper">—</h3>
+                    <small id="chg-copper" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-copper" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">白銀 (Silver, USD/oz)</h6>
+                    <h3 id="value-silver">—</h3>
+                    <small id="chg-silver" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-silver" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">天然氣 (Natural Gas, USD/MMBtu)</h6>
+                    <h3 id="value-ngas">—</h3>
+                    <small id="chg-ngas" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-ngas" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">鉑金 (Platinum, USD/oz)</h6>
+                    <h3 id="value-platinum">—</h3>
+                    <small id="chg-platinum" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-platinum" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">鈀金 (Palladium, USD/oz)</h6>
+                    <h3 id="value-palladium">—</h3>
+                    <small id="chg-palladium" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-palladium" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="pane-forex" role="tabpanel" aria-labelledby="tab-forex">
+          <div class="row g-3">
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">USD/TWD</h6>
+                    <h3 id="value-usdtwd">—</h3>
+                    <small id="chg-usdtwd" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-usdtwd" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">EUR/USD</h6>
+                    <h3 id="value-eurusd">—</h3>
+                    <small id="chg-eurusd" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-eurusd" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">USD/JPY</h6>
+                    <h3 id="value-usdjpy">—</h3>
+                    <small id="chg-usdjpy" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-usdjpy" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">GBP/USD</h6>
+                    <h3 id="value-gbpusd">—</h3>
+                    <small id="chg-gbpusd" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-gbpusd" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">AUD/USD</h6>
+                    <h3 id="value-audusd">—</h3>
+                    <small id="chg-audusd" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-audusd" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">USD/CNY</h6>
+                    <h3 id="value-usdcny">—</h3>
+                    <small id="chg-usdcny" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-usdcny" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-6 col-md-4 col-lg-3">
+              <div class="card card-dark shadow-sm">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="card-title">USD/SGD</h6>
+                    <h3 id="value-usdsgd">—</h3>
+                    <small id="chg-usdsgd" class="value-flat">—</small>
+                  </div>
+                  <div>
+                    <span id="arrow-usdsgd" class="arrow-flat">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-lg-9 mb-4">
+      <div class="d-flex align-items-center mb-2 flex-wrap">
+        <h4 class="me-3 mb-2">走勢圖</h4>
+
+        <select id="timeRange" class="form-select form-select-sm time-range-select mb-2 me-3">
+          <option value="20">過去 20 筆 (T-20 ~ T-1)</option>
+          <option value="60">過去 1 小時 (60 筆, 每分鐘 1 筆)</option>
+          <option value="240">過去 24 小時 (240 筆, 每小時 1 筆)</option>
+          <option value="168" selected>過去 7 天 (168 筆, 每小時 1 筆)</option>
+          <option value="30_d">過去 30 天 (30 筆, 每天 1 筆)</option>
+          <option value="90_d">過去 90 天 (90 筆, 每天 1 筆)</option>
+          <option value="custom">自訂期間</option>
+        </select>
+
+        <div id="customRangeInputs" class="ms-3 mb-2 d-none">
+          <input type="date" id="customStart" class="form-control form-control-sm d-inline-block" style="width: 120px;">
+          <span class="mx-1">～</span>
+          <input type="date" id="customEnd" class="form-control form-control-sm d-inline-block" style="width: 120px;">
+          <button id="applyCustomBtn" class="btn btn-sm btn-primary ms-2">套用</button>
+        </div>
+
+        <button id="resetZoomBtn" class="btn btn-outline-light btn-sm ms-3 mb-2">重置縮放</button>
+
+        <small class="text-white-secondary ms-auto mb-2" id="lastUpdate">上次更新：—</small>
+      </div>
+
+      <div class="card card-dark shadow-sm">
+        <div class="card-body p-2">
+          <div class="chart-container">
+            <canvas id="market-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3">
+      <h5 class="mb-3 text-white">顯示設定</h5>
+      <div class="accordion accordion-flush" id="controlsAccordion">
+
+        <div class="accordion-item card-dark border-0 mb-2">
+          <h2 class="accordion-header" id="headingIndex">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapseIndex"
+                    aria-expanded="false" aria-controls="collapseIndex">
+              全球指數
+            </button>
+          </h2>
+          <div id="collapseIndex" class="accordion-collapse collapse" aria-labelledby="headingIndex"
+               data-bs-parent="#controlsAccordion">
+            <div class="accordion-body">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input index-checkbox" type="checkbox" value="S&P 500" id="idx_sp500" checked>
+                <label class="form-check-label" for="idx_sp500">S&amp;P 500</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input index-checkbox" type="checkbox" value="NASDAQ" id="idx_nasdaq" checked>
+                <label class="form-check-label" for="idx_nasdaq">NASDAQ</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input index-checkbox" type="checkbox" value="FTSE 100" id="idx_ftse100" checked>
+                <label class="form-check-label" for="idx_ftse100">FTSE 100</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input index-checkbox" type="checkbox" value="DOW JONES" id="idx_dowjones" checked>
+                <label class="form-check-label" for="idx_dowjones">DOW JONES</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input index-checkbox" type="checkbox" value="NIKKEI" id="idx_nikkei" checked>
+                <label class="form-check-label" for="idx_nikkei">NIKKEI</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input index-checkbox" type="checkbox" value="DAX" id="idx_dax" checked>
+                <label class="form-check-label" for="idx_dax">DAX</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input index-checkbox" type="checkbox" value="CAC 40" id="idx_cac40" checked>
+                <label class="form-check-label" for="idx_cac40">CAC 40</label>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input index-checkbox" type="checkbox" value="Hang Seng" id="idx_hangseng" checked>
+                <label class="form-check-label" for="idx_hangseng">Hang Seng</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 大宗商品 -->
+        <div class="accordion-item card-dark border-0 mb-2">
+          <h2 class="accordion-header" id="headingComm">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapseComm"
+                    aria-expanded="false" aria-controls="collapseComm">
+              大宗商品
+            </button>
+          </h2>
+          <div id="collapseComm" class="accordion-collapse collapse" aria-labelledby="headingComm"
+               data-bs-parent="#controlsAccordion">
+            <div class="accordion-body">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input comm-checkbox" type="checkbox" value="Gold" id="comm_gold" checked>
+                <label class="form-check-label" for="comm_gold">黃金 (Gold)</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input comm-checkbox" type="checkbox" value="Crude Oil" id="comm_oil" checked>
+                <label class="form-check-label" for="comm_oil">原油 (Crude Oil)</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input comm-checkbox" type="checkbox" value="Copper" id="comm_copper" checked>
+                <label class="form-check-label" for="comm_copper">銅 (Copper)</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input comm-checkbox" type="checkbox" value="Silver" id="comm_silver" checked>
+                <label class="form-check-label" for="comm_silver">白銀 (Silver)</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input comm-checkbox" type="checkbox" value="Natural Gas" id="comm_ngas" checked>
+                <label class="form-check-label" for="comm_ngas">天然氣 (Natural Gas)</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input comm-checkbox" type="checkbox" value="Platinum" id="comm_platinum" checked>
+                <label class="form-check-label" for="comm_platinum">鉑金 (Platinum)</label>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input comm-checkbox" type="checkbox" value="Palladium" id="comm_palladium" checked>
+                <label class="form-check-label" for="comm_palladium">鈀金 (Palladium)</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 匯率 -->
+        <div class="accordion-item card-dark border-0">
+          <h2 class="accordion-header" id="headingForex">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapseForex"
+                    aria-expanded="false" aria-controls="collapseForex">
+              匯率
+            </button>
+          </h2>
+          <div id="collapseForex" class="accordion-collapse collapse" aria-labelledby="headingForex"
+               data-bs-parent="#controlsAccordion">
+            <div class="accordion-body">
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input forex-checkbox" type="checkbox" value="USD/TWD" id="fx_usdtwd" checked>
+                <label class="form-check-label" for="fx_usdtwd">USD/TWD</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input forex-checkbox" type="checkbox" value="EUR/USD" id="fx_eurusd" checked>
+                <label class="form-check-label" for="fx_eurusd">EUR/USD</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input forex-checkbox" type="checkbox" value="USD/JPY" id="fx_usdjpy" checked>
+                <label class="form-check-label" for="fx_usdjpy">USD/JPY</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input forex-checkbox" type="checkbox" value="GBP/USD" id="fx_gbpusd" checked>
+                <label class="form-check-label" for="fx_gbpusd">GBP/USD</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input forex-checkbox" type="checkbox" value="AUD/USD" id="fx_audusd" checked>
+                <label class="form-check-label" for="fx_audusd">AUD/USD</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input forex-checkbox" type="checkbox" value="USD/CNY" id="fx_usdcny" checked>
+                <label class="form-check-label" for="fx_usdcny">USD/CNY</label>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input forex-checkbox" type="checkbox" value="USD/SGD" id="fx_usdsgd" checked>
+                <label class="form-check-label" for="fx_usdsgd">USD/SGD</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <p class="mt-3 text-white-secondary small">點選上方分類後，可自由勾選想顯示的指標。</p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+      const clockEl = document.getElementById('clockDisplay');
+      function updateClock() {
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        clockEl.textContent = `${hh}:${mm}:${ss}`;
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+
+      async function fetchMarketSummary() {
+        try {
+          const res = await fetch('/api/market_summary');
+          if (!res.ok) throw new Error('fetch error');
+          const data = await res.json();
+
+          Object.entries(data).forEach(([key, obj]) => {
+            const idKey = key.replace(/[\s\/\u00A0]/g, '').toLowerCase();
+
+            const elVal = document.getElementById(`value-${idKey}`);
+            const elChg = document.getElementById(`chg-${idKey}`);
+            const elArr = document.getElementById(`arrow-${idKey}`);
+            if (!elVal || !elChg || !elArr) return;
+
+            if (obj.price === null) {
+              elVal.textContent = '—';
+              elChg.textContent = '—';
+              elChg.classList.remove('value-up', 'value-down');
+              elChg.classList.add('value-flat');
+              elArr.textContent = '─';
+              elArr.className = 'arrow-flat';
+            } else {
+              elVal.textContent = obj.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              const changePct = obj.change_pct;
+
+              if (changePct > 0) {
+                elChg.textContent = `↑${changePct.toFixed(2)}%`;
+                elChg.classList.remove('value-down', 'value-flat');
+                elChg.classList.add('value-up');
+                elArr.textContent = '▲';
+                elArr.className = 'arrow-up';
+              } else if (changePct < 0) {
+                elChg.textContent = `↓${Math.abs(changePct).toFixed(2)}%`;
+                elChg.classList.remove('value-up', 'value-flat');
+                elChg.classList.add('value-down');
+                elArr.textContent = '▼';
+                elArr.className = 'arrow-down';
+              } else {
+                elChg.textContent = '─ 0.00%';
+                elChg.classList.remove('value-up', 'value-down');
+                elChg.classList.add('value-flat');
+                elArr.textContent = '─';
+                elArr.className = 'arrow-flat';
+              }
+            }
+          });
+
+          const now = new Date();
+          const fmt = now.toLocaleString('zh-TW', { hour12: false });
+          document.getElementById('lastUpdate').textContent = `上次更新：${fmt}`;
+        } catch (err) {
+          console.error('fetchMarketSummary error', err);
         }
       }
+
+      fetchMarketSummary();
+      setInterval(fetchMarketSummary, 60 * 1000);
+
+      function generateLabels(count, mode = 'hourly') {
+        const arr = [];
+        if (mode === 'hourly') {
+          for (let i = count; i >= 1; i--) {
+            arr.push(`T-${i}`);
+          }
+        } else if (mode === 'daily') {
+          const today = new Date();
+          for (let i = count - 1; i >= 0; i--) {
+            const dt = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+            arr.push(`${dt.getMonth()+1}/${dt.getDate()}`);
+          }
+        } else if (mode === 'minute') {
+          for (let i = count; i >= 1; i--) {
+            arr.push(`M-${i}`);
+          }
+        }
+        return arr;
+      }
+      function generateRandomData(base, variance, count) {
+        const arr = [];
+        let last = base;
+        for (let i = 0; i < count; i++) {
+          const delta = (Math.random() * 2 - 1) * variance;
+          last = +(last + delta).toFixed(4);
+          arr.push(last);
+        }
+        return arr;
+      }
+
+      const datasetConfigs = {
+        "S&P 500":     { base: 4500, variance: 40,   border: '#ff6384' },
+        "NASDAQ":      { base: 15000, variance: 150, border: '#36a2eb' },
+        "FTSE 100":    { base: 7600, variance: 50,   border: '#ffce56' },
+        "DOW JONES":   { base: 35000, variance: 200, border: '#4bc0c0' },
+        "NIKKEI":      { base: 29000, variance: 150, border: '#9966ff' },
+        "DAX":         { base: 15800, variance: 100, border: '#00aaff' },
+        "CAC 40":      { base: 7500, variance: 80,   border: '#ffaa00' },
+        "Hang Seng":   { base: 18000, variance: 200, border: '#22cc22' },
+        "Gold":        { base: 1950, variance: 25,   border: '#8e5ea2' },
+        "Crude Oil":   { base: 70, variance: 5,      border: '#3cba9f' },
+        "Copper":      { base: 4.5, variance: 0.3,   border: '#e8c3b9' },
+        "Silver":      { base: 25, variance: 1,      border: '#c9cbcf' },
+        "Natural Gas": { base: 2.5, variance: 0.2,   border: '#ff9f40' },
+        "Platinum":    { base: 900, variance: 20,    border: '#e0e0e0' },
+        "Palladium":   { base: 2200, variance: 50,   border: '#a0522d' },
+        "USD/TWD":     { base: 29.5, variance: 0.4,   border: '#f44336' },
+        "EUR/USD":     { base: 1.10, variance: 0.03,  border: '#2196f3' },
+        "USD/JPY":     { base: 0.0075, variance: 0.0004, border: '#ff9800' },
+        "GBP/USD":     { base: 1.27, variance: 0.02,  border: '#9c27b0' },
+        "AUD/USD":     { base: 0.68, variance: 0.02,  border: '#009688' },
+        "USD/CNY":     { base: 7.20, variance: 0.05,  border: '#795548' },
+        "USD/SGD":     { base: 1.35, variance: 0.02,  border: '#3f51b5' }
+      };
+
+      const initialVisibility = {
+        "S&P 500": true,
+        "NASDAQ": true,
+        "FTSE 100": true,
+        "DOW JONES": true,
+        "NIKKEI": true,
+        "DAX": false,
+        "CAC 40": false,
+        "Hang Seng": false,
+        "Gold": true,
+        "Crude Oil": true,
+        "Copper": true,
+        "Silver": false,
+        "Natural Gas": false,
+        "Platinum": false,
+        "Palladium": false,
+        "USD/TWD": true,
+        "EUR/USD": true,
+        "USD/JPY": true,
+        "GBP/USD": false,
+        "AUD/USD": false,
+        "USD/CNY": false,
+        "USD/SGD": false
+      };
+
+      let currentRange = '168';
+      let mode = 'hourly';
+      let labelCount = 168;
+      let labelsArr = generateLabels(labelCount, mode);
+
+      function buildDatasets() {
+        const arr = [];
+        Object.entries(datasetConfigs).forEach(([key, cfg]) => {
+          arr.push({
+            label: key,
+            data: generateRandomData(cfg.base, cfg.variance, labelCount),
+            borderColor: cfg.border,
+            backgroundColor: 'rgba(0,0,0,0)',
+            tension: 0.3,
+            pointRadius: 0,
+            hidden: !initialVisibility[key]
+          });
+        });
+        return arr;
+      }
+
+      const ctxChart = document.getElementById('market-chart').getContext('2d');
+      let marketChart = null;
+      function createChart() {
+        labelsArr = generateLabels(labelCount, mode);
+        const dataSets = buildDatasets();
+        if (marketChart) marketChart.destroy();
+
+        marketChart = new Chart(ctxChart, {
+          type: 'line',
+          data: {
+            labels: labelsArr,
+            datasets: dataSets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                labels: {
+                  color: '#e6e8eb',
+                  usePointStyle: true,
+                  pointStyle: 'circle',
+                  boxWidth: 12,
+                  boxHeight: 12
+                },
+                onClick: (e, legendItem, legend) => {
+                  const index = legendItem.datasetIndex;
+                  const ci = legend.chart;
+                  const meta = ci.getDatasetMeta(index);
+                  meta.hidden = !meta.hidden;
+                  ci.update();
+                }
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+                backgroundColor: '#2b2b38',
+                titleColor: '#e6e8eb',
+                bodyColor: '#f1f3f5',
+                borderColor: '#3a3d4e',
+                borderWidth: 1,
+                callbacks: {
+                  label: (ctx) => {
+                    const val = ctx.parsed.y;
+                    return ctx.dataset.label + ': ' + val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  }
+                }
+              },
+              zoom: {
+                pan: {
+                  enabled: true,
+                  mode: 'x',
+                  modifierKey: 'ctrl'
+                },
+                zoom: {
+                  wheel: { enabled: true },
+                  pinch: { enabled: true },
+                  mode: 'x'
+                }
+              }
+            },
+            interaction: {
+              mode: 'nearest',
+              intersect: false
+            },
+            scales: {
+              x: {
+                ticks: {
+                  color: '#adb5bd',
+                  maxRotation: 0,
+                  autoSkip: true,
+                  maxTicksLimit: 12
+                },
+                grid: { display: false }
+              },
+              y: {
+                ticks: {
+                  color: '#adb5bd',
+                  callback: (val) => {
+                    if (Number.isInteger(val)) {
+                      return val.toLocaleString();
+                    }
+                    return val;
+                  }
+                },
+                grid: { color: 'rgba(255,255,255,0.1)' }
+              }
+            }
+          }
+        });
+      }
+
+      createChart();
+
+      function updateRangeSettings(rangeKey) {
+        switch (rangeKey) {
+          case '20':
+            labelCount = 20; mode = 'hourly'; break;
+          case '60':
+            labelCount = 60; mode = 'minute'; break;
+          case '240':
+            labelCount = 240; mode = 'hourly'; break;
+          case '168':
+            labelCount = 168; mode = 'hourly'; break;
+          case '30_d':
+            labelCount = 30; mode = 'daily'; break;
+          case '90_d':
+            labelCount = 90; mode = 'daily'; break;
+          default:
+            labelCount = 168; mode = 'hourly'; break;
+        }
+      }
+
+      document.getElementById('timeRange').addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'custom') {
+          document.getElementById('customRangeInputs').classList.remove('d-none');
+        } else {
+          document.getElementById('customRangeInputs').classList.add('d-none');
+          updateRangeSettings(val);
+          createChart();
+        }
+      });
+
+      document.getElementById('applyCustomBtn').addEventListener('click', () => {
+        const start = document.getElementById('customStart').value;
+        const end   = document.getElementById('customEnd').value;
+        if (!start || !end) {
+          alert('請先選擇開始與結束日期');
+          return;
+        }
+        const startDt = new Date(start);
+        const endDt   = new Date(end);
+        if (endDt <= startDt) {
+          alert('結束日期必須大於開始日期');
+          return;
+        }
+        const diffTime = endDt.getTime() - startDt.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        labelCount = diffDays;
+        mode = 'daily';
+        const arr = [];
+        for (let i = diffDays - 1; i >= 0; i--) {
+          const dt = new Date(endDt.getTime() - i * 24 * 60 * 60 * 1000);
+          arr.push(`${dt.getMonth() + 1}/${dt.getDate()}`);
+        }
+        labelsArr = arr;
+
+        const newDs = [];
+        Object.entries(datasetConfigs).forEach(([key, cfg]) => {
+          newDs.push({
+            label: key,
+            data: generateRandomData(cfg.base, cfg.variance, labelCount),
+            borderColor: cfg.border,
+            backgroundColor: 'rgba(0,0,0,0)',
+            tension: 0.3,
+            pointRadius: 0,
+            hidden: !initialVisibility[key]
+          });
+        });
+        if (marketChart) marketChart.destroy();
+        marketChart = new Chart(ctxChart, {
+          type: 'line',
+          data: {
+            labels: labelsArr,
+            datasets: newDs
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: {
+                labels: {
+                  color: '#e6e8eb',
+                  usePointStyle: true,
+                  pointStyle: 'circle',
+                  boxWidth: 12,
+                  boxHeight: 12
+                },
+                onClick: (e, legendItem, legend) => {
+                  const index = legendItem.datasetIndex;
+                  const ci = legend.chart;
+                  const meta = ci.getDatasetMeta(index);
+                  meta.hidden = !meta.hidden;
+                  ci.update();
+                }
+              },
+              tooltip: {
+                mode: 'index',
+                intersect: false,
+                backgroundColor: '#2b2b38',
+                titleColor: '#e6e8eb',
+                bodyColor: '#f1f3f5',
+                borderColor: '#3a3d4e',
+                borderWidth: 1,
+                callbacks: {
+                  label: (ctx) => {
+                    const val = ctx.parsed.y;
+                    return ctx.dataset.label + ': ' + val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  }
+                }
+              },
+              zoom: {
+                pan: {
+                  enabled: true,
+                  mode: 'x',
+                  modifierKey: 'ctrl'
+                },
+                zoom: {
+                  wheel: { enabled: true },
+                  pinch: { enabled: true },
+                  mode: 'x'
+                }
+              }
+            },
+            interaction: {
+              mode: 'nearest',
+              intersect: false
+            },
+            scales: {
+              x: {
+                ticks: {
+                  color: '#adb5bd',
+                  maxRotation: 0,
+                  autoSkip: true,
+                  maxTicksLimit: 12
+                },
+                grid: { display: false }
+              },
+              y: {
+                ticks: {
+                  color: '#adb5bd',
+                  callback: (val) => {
+                    if (Number.isInteger(val)) {
+                      return val.toLocaleString();
+                    }
+                    return val;
+                  }
+                },
+                grid: { color: 'rgba(255,255,255,0.1)' }
+              }
+            }
+          }
+        });
+      });
+
+      document.getElementById('resetZoomBtn').addEventListener('click', () => {
+        if (marketChart) marketChart.resetZoom();
+      });
+
+      function toggleDatasetVisibility(name, visible) {
+        const arr = marketChart.data.datasets;
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i].label === name) {
+            arr[i].hidden = !visible;
+            marketChart.update();
+            return;
+          }
+        }
+      }
+      document.querySelectorAll('.index-checkbox').forEach((cb) => {
+        cb.addEventListener('change', (e) => toggleDatasetVisibility(e.target.value, e.target.checked));
+      });
+      document.querySelectorAll('.comm-checkbox').forEach((cb) => {
+        cb.addEventListener('change', (e) => toggleDatasetVisibility(e.target.value, e.target.checked));
+      });
+      document.querySelectorAll('.forex-checkbox').forEach((cb) => {
+        cb.addEventListener('change', (e) => toggleDatasetVisibility(e.target.value, e.target.checked));
+      });
+
+      function refreshChartData() {
+        marketChart.data.datasets.forEach((ds) => {
+          const lastVal = ds.data[ds.data.length - 1];
+          const variance = Math.abs(lastVal * 0.01);
+          ds.data = generateRandomData(lastVal, variance, labelCount);
+        });
+        marketChart.update();
+      }
+      setInterval(refreshChartData, 60 * 1000);
+
     });
-  });
-{% endraw %}
-</script>
+  </script>
 {% endblock %}
