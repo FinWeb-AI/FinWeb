@@ -10,50 +10,17 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
   <style>
-    /*── Chat Widget ─────────────────────────────────────*/
-    #chat-toggle {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 56px;
-      height: 56px;
-      border: none;
-      border-radius: 50%;
-      background: #26a69a;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      z-index: 1050;
+    #chat-toggle{
+      position:fixed;bottom:20px;right:20px;width:56px;height:56px;border:none;border-radius:50%;
+      background:#26a69a;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:1050;
     }
-    #chat-panel {
-      position: fixed;
-      bottom: 90px;
-      right: 20px;
-      width: 360px;
-      height: 480px;
-      background: #202226;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-      display: none;
-      flex-direction: column;
-      overflow: hidden;
-      z-index: 1049;
+    #chat-panel{
+      position:fixed;bottom:90px;right:20px;width:360px;height:480px;background:#202226;border-radius:8px;
+      box-shadow:0 4px 12px rgba(0,0,0,.5);display:none;flex-direction:column;overflow:hidden;z-index:1049;
     }
-    #chat-panel.show {
-      display: flex;
-      animation: fadeInUp 0.3s;
-    }
-    .chat-header {
-      padding: 0.5rem 1rem;
-      background: #181a1f;
-      color: #fff;
-    }
-    .chat-iframe {
-      flex: 1;
-      border: none;
-      background: #202226;
-    }
+    #chat-panel.show{display:flex;animation:fadeInUp .3s;}
+    .chat-header{padding:.5rem 1rem;background:#181a1f;color:#fff;}
+    .chat-iframe{flex:1;border:none;background:#202226;}
   </style>
 </head>
 
@@ -69,22 +36,31 @@
 
       <div id="navMenu" class="collapse navbar-collapse">
         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <!--即時行情 -->
+
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint in ['index','crypto'] %}active{% endif %} text-light"
                href="{{ url_for('crypto') }}">即時行情</a>
           </li>
+
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle text-light" href="#" role="button" data-bs-toggle="dropdown">
               走勢分析
             </a>
             <ul class="dropdown-menu bg-dark">
+
               <li>
                 <a class="dropdown-item {% if request.endpoint in ['index','crypto'] %}active{% endif %} bg-dark text-light"
                    href="{{ url_for('crypto') }}">加密貨幣</a>
               </li>
+
               <li>
-                <a class="nav-link" href="{{ url_for('stocks.stocks_page') }}">股票</a>
+                <a class="dropdown-item {% if request.endpoint == 'stocks.stocks_page' %}active{% endif %} bg-dark text-light"
+                   href="{{ url_for('stocks.stocks_page') }}">股票</a>
+              </li>
+
+              <li>
+                <a class="dropdown-item {% if request.endpoint.startswith('trend.') %}active{% endif %} bg-dark text-light"
+                   href="{{ url_for('trend.trend_home') }}">股票趨勢</a>
               </li>
             </ul>
           </li>
@@ -93,13 +69,13 @@
             <a class="nav-link dropdown-toggle text-light" href="#" data-bs-toggle="dropdown">
               金融工具
             </a>
-            <ul class="dropdown-menu">
+            <ul class="dropdown-menu bg-dark">
               <li>
-                <a class="dropdown-item {% if request.endpoint == 'ai_analysis' %}active{% endif %}"
+                <a class="dropdown-item {% if request.endpoint == 'ai_analysis' %}active{% endif %} bg-dark text-light"
                    href="{{ url_for('ai_analysis') }}">AI 分析</a>
               </li>
               <li>
-                <a class="dropdown-item {% if request.endpoint == 'market_overview' %}active{% endif %}"
+                <a class="dropdown-item {% if request.endpoint == 'market_overview' %}active{% endif %} bg-dark text-light"
                    href="{{ url_for('market_overview') }}">市場概覽</a>
               </li>
             </ul>
@@ -113,21 +89,13 @@
                 👤 {{ current_user.username }}
               </a>
               <ul class="dropdown-menu dropdown-menu-end">
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('assistant') }}">AI 助理面板</a>
-                </li>
-                <li>
-                  <a class="dropdown-item" href="{{ url_for('logout') }}">登出</a>
-                </li>
+                <li><a class="dropdown-item" href="{{ url_for('assistant') }}">AI 助理面板</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('logout') }}">登出</a></li>
               </ul>
             </li>
           {% else %}
-            <li class="nav-item">
-              <a class="nav-link text-light" href="{{ url_for('login') }}">登入</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link text-light" href="{{ url_for('register') }}">註冊</a>
-            </li>
+            <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('login') }}">登入</a></li>
+            <li class="nav-item"><a class="nav-link text-light" href="{{ url_for('register') }}">註冊</a></li>
           {% endif %}
         </ul>
       </div>
@@ -170,7 +138,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   {% block scripts %}{% endblock %}
-
   <script src="https://www.google.com/recaptcha/api.js" async defer></script>
 
   <script>
@@ -179,12 +146,8 @@
       const panel  = document.getElementById('chat-panel');
       const close  = document.getElementById('chat-close');
       if (toggle && panel && close) {
-        toggle.addEventListener('click', () => {
-          panel.classList.toggle('show');
-        });
-        close.addEventListener('click', () => {
-          panel.classList.remove('show');
-        });
+        toggle.addEventListener('click', () => panel.classList.toggle('show'));
+        close .addEventListener('click', () => panel.classList.remove('show'));
       }
     });
   </script>

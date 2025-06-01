@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ symbol }} 趨勢分析 - FinWeb{% endblock %}
+
+{% block content %}
+<h2 class="mb-3">{{ symbol }} 趨勢分析</h2>
+<canvas id="chart" height="350"></canvas>
+
+<div class="mt-4">
+  <h5 class="mb-2">AI 分析</h5>
+  <p>{{ analysis|safe }}</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const rows = {{ data|safe }};
+const labels = rows.map(r => r.date);
+const close  = rows.map(r => r.close);
+const sma20  = rows.map(r => r.sma20);
+const sma50  = rows.map(r => r.sma50);
+
+new Chart(document.getElementById("chart"), {
+  type: "line",
+  data: {
+    labels,
+    datasets: [
+      { label: "收盤價", data: close , borderWidth: 1 },
+      { label: "SMA 20", data: sma20 , borderWidth: 1 },
+      { label: "SMA 50", data: sma50 , borderWidth: 1 }
+    ]
+  },
+  options: { responsive: true, scales: { x: { display: false } } }
+});
+</script>
+{% endblock %}

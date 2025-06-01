@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}資產趨勢分析 - FinWeb{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">資產趨勢分析</h2>
+
+<form method="post" class="row g-3 align-items-end">
+  <div class="col-auto">
+    <label class="form-label">選擇資產類型：</label><br />
+    <div class="form-check form-check-inline">
+      <input
+        class="form-check-input"
+        type="radio"
+        name="asset_type"
+        id="stock_radio"
+        value="stock"
+        checked
+      />
+      <label class="form-check-label" for="stock_radio">股票</label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input
+        class="form-check-input"
+        type="radio"
+        name="asset_type"
+        id="crypto_radio"
+        value="crypto"
+      />
+      <label class="form-check-label" for="crypto_radio">加密貨幣</label>
+    </div>
+  </div>
+
+  <div class="col-auto">
+    <label for="symbol_input" class="form-label">代號：</label>
+    <input
+      list="symbol_list"
+      class="form-control"
+      name="symbol"
+      id="symbol_input"
+      placeholder="請輸入或選擇股票代號"
+      required
+    />
+    <datalist id="symbol_list">
+      {% for sym in all_stocks %}
+      <option value="{{ sym }}"></option>
+      {% endfor %}
+    </datalist>
+  </div>
+
+  <div class="col-auto">
+    <button class="btn btn-primary">分析</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const stockRadio = document.getElementById("stock_radio");
+  const cryptoRadio = document.getElementById("crypto_radio");
+  const symbolInput = document.getElementById("symbol_input");
+  const datalist = document.getElementById("symbol_list");
+  const popular_stocks = {{ popular_stocks|tojson }};
+  const popular_cryptos = {{ popular_cryptos|tojson }};
+  const all_stocks = {{ all_stocks|tojson }};
+
+  function updateDatalist() {
+    while (datalist.firstChild) {
+      datalist.removeChild(datalist.firstChild);
+    }
+
+    if (stockRadio.checked) {
+      for (const sym of all_stocks) {
+        const opt = document.createElement("option");
+        opt.value = sym;
+        datalist.appendChild(opt);
+      }
+      symbolInput.placeholder = "請輸入或選擇股票代號 (如 1101.TW)";
+    } else {
+      for (const [name, sym] of popular_cryptos) {
+        const opt = document.createElement("option");
+        opt.value = sym;
+        datalist.appendChild(opt);
+      }
+      symbolInput.placeholder = "請輸入或選擇加密貨幣代號 (如 bitcoin)";
+    }
+  }
+
+  stockRadio.addEventListener("change", updateDatalist);
+  cryptoRadio.addEventListener("change", updateDatalist);
+  window.addEventListener("DOMContentLoaded", updateDatalist);
+</script>
+{% endblock %}

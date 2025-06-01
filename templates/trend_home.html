@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}股票趨勢分析 - FinWeb{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">股票趨勢分析</h2>
+
+<form method="post" class="row g-3">
+  <div class="col-auto">
+    <input class="form-control" name="symbol" placeholder="輸入股票代號，如 AAPL" required>
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-primary">分析</button>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ label }} 趨勢分析 - FinWeb{% endblock %}
+
+{% block content %}
+<h2 class="mb-3">{{ label }} 趨勢分析</h2>
+
+<div style="position: relative; height:350px; width:100%;">
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="mt-4">
+  <h5 class="mb-2">機器學習預測</h5>
+  {% set badge_color =
+    "success" if "Buy"  in dl_message else
+    "danger"  if "Sell" in dl_message else
+    "secondary" %}
+  <span class="badge bg-{{ badge_color }} me-2">{{ dl_message }}</span>
+</div>
+
+<div class="mt-4">
+  <h5 class="mb-2">AI 投資建議</h5>
+  <p>{{ invest_advice|safe }}</p>
+</div>
+
+<div class="mt-4">
+  <h5 class="mb-2">趨勢分析 (60 日)</h5>
+  <p>{{ ai_analysis|safe }}</p>
+</div>
+
+<div class="mt-4">
+  <a href="{{ url_for('trend.trend_home') }}" class="btn btn-secondary">返回首頁</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/chart.4.4.3.min.js') }}"></script>
+
+<script>
+  const rows      = {{ data|safe }};
+  const labels    = rows.map(r => r.date);
+  const closeData = rows.map(r => r.close);
+  const sma20Data = rows.map(r => r.sma20);
+  const sma50Data = rows.map(r => r.sma50);
+
+  new Chart(document.getElementById("chart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "收盤價",
+          data: closeData,
+          borderWidth: 2,
+          borderColor: "#ffc107",
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0
+        },
+        {
+          label: "SMA 20",
+          data: sma20Data,
+          borderWidth: 2,
+          borderColor: "#00d5a5",
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0
+        },
+        {
+          label: "SMA 50",
+          data: sma50Data,
+          borderWidth: 2,
+          borderColor: "#4c6fff",
+          fill: false,
+          tension: 0.3,
+          pointRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      scales: {
+        x: { display: false },
+        y: { beginAtZero: false }
+      }
+    }
+  });
+</script>
+{% endblock %}
