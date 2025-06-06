@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}圖像辨識 – FinWeb{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">蠟燭圖型態辨識</h1>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card bg-dark text-light h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>預覽</span>
+        <div>
+          <input type="file" id="img-file" accept="image/*" hidden>
+          <button class="btn btn-outline-light btn-sm me-2" onclick="document.getElementById('img-file').click()">上傳圖片</button>
+          <button id="cam-btn" class="btn btn-outline-success btn-sm">開啟攝影機</button>
+        </div>
+      </div>
+      <div class="card-body p-0 d-flex align-items-center justify-content-center">
+        <canvas id="cv-canvas" style="max-width:100%;max-height:450px;"></canvas>
+        <video id="cv-video" class="d-none" autoplay muted playsinline></video>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card bg-dark text-light h-100">
+      <div class="card-header">偵測結果</div>
+      <div class="card-body">
+        <ul class="list-group list-group-flush mb-3" id="det-list"></ul>
+        <h5>Gemini 建議</h5>
+        <p id="ai-suggest" class="small text-muted">請先偵測圖像。</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const cvs = document.getElementById('cv-canvas');
+const ctx = cvs.getContext('2d');
+const detList = document.getElementById('det-list');
+const suggest = document.getElementById('ai-suggest');
+let stream=null;
+
+document.getElementById('img-file').addEventListener('change',e=>{
+  if(e.target.files.length){
+    const img=new Image();
+    img.onload=()=>{ drawAndDetect(img); };
+    img.src=URL.createObjectURL(e.target.files[0]);
+  }
+});
+
+document.getElementById('cam-btn').addEventListener('click',async()=>{
+  if(stream){ stopCam(); return; }
+  stream=await navigator.mediaDevices.getUserMedia({video:true});
+  const video=document.getElementById('cv-video');
+  video.srcObject=stream;
+  video.classList.remove('d-none'); cvs.classList.add('d-none');
+  detectLoop(video);
+});
+
+function stopCam(){
+  stream.getTracks().forEach(t=>t.stop());
+  stream=null;
+  document.getElementById('cv-video').classList.add('d-none');
+  cvs.classList.remove('d-none');
+}
+
+function drawAndDetect(img){
+  cvs.width=img.width; cvs.height=img.height;
+  ctx.drawImage(img,0,0);
+  detect(cvs.toDataURL());
+}
+
+async function detectLoop(video){
+  if(!stream) return;
+  drawAndDetect(video);
+  requestAnimationFrame(()=>detectLoop(video));
+}
+
+async function detect(dataURL){
+  const blob=await (await fetch(dataURL)).blob();
+  const fd=new FormData(); fd.append('file',blob,'img.png');
+  const res=await fetch('/api/cv_detect',{method:'POST',body:fd});
+  const dets=await res.json();
+  drawBoxes(dets);
+  renderList(dets);
+  fetchSuggest(dets);
+}
+
+function drawBoxes(dets){
+  ctx.lineWidth=2;
+  dets.forEach(d=>{
+    ctx.strokeStyle=d.label==='Positive'?'#26a69a':'#ffc107';
+    const [x1,y1,x2,y2]=d.bbox;
+    ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    ctx.fillStyle='#fff'; ctx.font='12px sans-serif';
+    ctx.fillText(d.label,x1,y1-4);
+  });
+}
+
+function renderList(dets){
+  detList.innerHTML='';
+  dets.forEach(d=>{
+    const li=document.createElement('li');
+    li.className='list-group-item bg-dark text-light d-flex justify-content-between';
+    li.innerHTML=`<span>${d.label}</span><span class="text-muted">${(d.conf*100).toFixed(1)}%</span>`;
+    detList.appendChild(li);
+  });
+}
+
+async function fetchSuggest(dets){
+  if(!dets.length){suggest.textContent='未偵測到型態';return;}
+  const prompt='以下蠟燭型態: '+dets.map(d=>d.label).join('、')+'，請給台灣散戶簡短交易建議(50字內)。';
+  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+             body:JSON.stringify({message:prompt})});
+  const {reply}=await res.json();
+  suggest.textContent=reply;
+}
+</script>
+{% endblock %}

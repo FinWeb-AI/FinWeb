@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}策略回測 – FinWeb{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">量化策略回測</h1>
+
+<div class="card bg-dark text-light">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">策略</label>
+        <select id="strat-sel" class="form-select">
+          <option value="dma">雙均線</option>
+          <option value="rsi">RSI</option>
+          <option value="macd">MACD</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">標的</label>
+        <input id="bt-symbol" class="form-control" value="AAPL">
+      </div>
+      <div class="col-md-2">
+        <button id="bt-run" class="btn btn-success w-100">執行</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<canvas id="bt-chart" height="380" class="mt-4"></canvas>
+
+<div class="row text-center mt-3">
+  <div class="col"><h5>總報酬</h5><p id="ret" class="text-success">--%</p></div>
+  <div class="col"><h5>Sharpe</h5><p id="sharpe">--</p></div>
+  <div class="col"><h5>最大回撤</h5><p id="mdd" class="text-danger">--%</p></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx=document.getElementById('bt-chart');
+const btChart=new Chart(ctx,{type:'line',
+  data:{labels:[],datasets:[{label:'Equity',data:[],borderColor:'#26a69a',pointRadius:0,tension:.2}]},
+  options:{plugins:{legend:{labels:{color:'#fff'}}},scales:{x:{ticks:{color:'#bbb'}},y:{ticks:{color:'#bbb'}}}}
+});
+document.getElementById('bt-run').addEventListener('click',async()=>{
+  const sym=document.getElementById('bt-symbol').value.trim();
+  const strat=document.getElementById('strat-sel').value;
+  const res=await fetch(`/api/backtest?symbol=${sym}&strategy=${strat}`);
+  const d=await res.json();
+  btChart.data.labels=d.dates; btChart.data.datasets[0].data=d.equity;
+  btChart.update();
+  document.getElementById('ret').textContent=(d.total_return*100).toFixed(1)+'%';
+  document.getElementById('sharpe').textContent=d.sharpe.toFixed(2);
+  document.getElementById('mdd').textContent=(d.max_dd*100).toFixed(1)+'%';
+});
+</script>
+{% endblock %}

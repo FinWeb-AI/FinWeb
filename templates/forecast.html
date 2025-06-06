@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}AI 預測 – FinWeb{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">AI 價格預測</h1>
+
+<div class="card bg-dark text-light">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">標的</label>
+        <select id="symbol-sel" class="form-select">
+          <option>BTC-USD</option><option>ETH-USD</option>
+          <option>AAPL</option><option>TSLA</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">歷史天數</label>
+        <input id="period-inp" type="number" class="form-control" value="365" min="180" max="1825">
+      </div>
+      <div class="col-md-3">
+        <button id="run-btn" class="btn btn-success w-100">重新預測</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<canvas id="fc-chart" height="380" class="mt-4"></canvas>
+<div class="text-end text-muted small">MAPE: <span id="mape-val">--</span>%</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx=document.getElementById('fc-chart');
+const chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[
+  {label:'歷史',data:[],borderColor:'#26a69a',pointRadius:0,tension:.2},
+  {label:'預測',data:[],borderDash:[5,5],borderColor:'#ffc107',pointRadius:3,tension:.2}
+]},options:{plugins:{legend:{labels:{color:'#fff'}}},
+  scales:{x:{ticks:{color:'#bbb'}},y:{ticks:{color:'#bbb'}}}}});
+
+document.getElementById('run-btn').addEventListener('click',run);
+run();
+
+async function run(){
+  const sym=document.getElementById('symbol-sel').value;
+  const days=document.getElementById('period-inp').value;
+  const res=await fetch(`/api/forecast?symbol=${sym}&period=${days}`);
+  const {history,future}=await res.json();
+  const labels=[...history.map(r=>r.ds),...future.map(r=>r.ds)];
+  const histData=history.map(r=>r.y);
+  const futData=[...Array(history.length).fill(null),...future.map(r=>r.yhat)];
+  chart.data.labels=labels;
+  chart.data.datasets[0].data=[...histData];
+  chart.data.datasets[1].data=[...futData];
+  chart.update();
+
+  // MAPE
+  let err=0,n=history.slice(-7).length;
+  history.slice(-7).forEach((h,i)=>{err+=Math.abs(h.y-future[i].yhat)/h.y;});
+  document.getElementById('mape-val').textContent=(err/n*100).toFixed(2);
+}
+</script>
+{% endblock %}

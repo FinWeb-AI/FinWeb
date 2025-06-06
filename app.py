@@ -32,8 +32,12 @@ from passlib.hash import argon2
 from sqlalchemy import text
 import yfinance as yf
 import google.generativeai as genai
-
 from stocks import stock_bp
+from sentiment import sent_bp
+from cv_pattern import cv_bp
+from forecast import fc_bp
+from backtest import bt_bp
+from portfolio import pf_bp
 from trend_analysis import trend_bp
 
 try:
@@ -146,6 +150,12 @@ with app.app_context():
             db.session.execute(text(f"ALTER TABLE user ADD COLUMN {col} {ddl}"))
             db.session.commit()
             app.logger.info(f"ALTER TABLE user ADD COLUMN {col} ({ddl})")
+
+app.register_blueprint(sent_bp,   url_prefix="/")
+app.register_blueprint(cv_bp,     url_prefix="/")
+app.register_blueprint(fc_bp,     url_prefix="/")
+app.register_blueprint(bt_bp,     url_prefix="/")
+app.register_blueprint(pf_bp,     url_prefix="/")
 
 @login_mgr.user_loader
 def load_user(uid: str) -> User | None:

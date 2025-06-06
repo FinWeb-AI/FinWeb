@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}投組風險 – FinWeb{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">投資組合風險分析</h1>
+
+<div class="card bg-dark text-light">
+  <div class="card-body">
+    <table class="table table-dark table-sm mb-0" id="pf-table">
+      <thead><tr><th>標的</th><th>權重(%)</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><input class="form-control" value="AAPL"></td><td><input class="form-control" value="40"></td><td></td></tr>
+        <tr><td><input class="form-control" value="TSLA"></td><td><input class="form-control" value="30"></td><td></td></tr>
+        <tr><td><input class="form-control" value="BTC-USD"></td><td><input class="form-control" value="30"></td><td></td></tr>
+      </tbody>
+    </table>
+    <button id="add-row" class="btn btn-outline-light btn-sm mt-2">新增標的</button>
+    <button id="pf-run" class="btn btn-success btn-sm mt-2 ms-2">計算</button>
+  </div>
+</div>
+
+<div class="row g-4 mt-4">
+  <div class="col-lg-4">
+    <div class="card bg-dark text-light h-100">
+      <div class="card-header">風險指標</div>
+      <ul class="list-group list-group-flush" id="risk-list"></ul>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <div class="card bg-dark text-light h-100">
+      <div class="card-header">相關係數熱圖</div>
+      <div class="card-body p-0">
+        <svg id="heatmap" width="100%" height="400"></svg>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script>
+document.getElementById('add-row').onclick=()=>{
+  const tr=document.createElement('tr');
+  tr.innerHTML='<td><input class="form-control"></td><td><input class="form-control"></td><td></td>';
+  document.querySelector('#pf-table tbody').appendChild(tr);
+};
+
+document.getElementById('pf-run').onclick=async()=>{
+  const rows=[...document.querySelectorAll('#pf-table tbody tr')];
+  const payload=rows.map(r=>({
+    symbol:r.children[0].querySelector('input').value.trim(),
+    weight:parseFloat(r.children[1].querySelector('input').value)
+  })).filter(r=>r.symbol&&r.weight);
+
+  const res=await fetch('/api/portfolio',{method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify(payload)});
+  const dat=await res.json();
+
+  const ul=document.getElementById('risk-list'); ul.innerHTML='';
+  ['VaR','CVaR','Volatility'].forEach(k=>{
+    const li=document.createElement('li'); li.className='list-group-item bg-dark text-light d-flex justify-content-between';
+    li.innerHTML=`<span>${k}</span><span>${(dat[k.toLowerCase()]*100).toFixed(2)}%</span>`;
+    ul.appendChild(li);
+  });
+
+  drawHeat(dat.corr);
+};
+
+function drawHeat(corr){
+  const svg=d3.select('#heatmap'),size=40,pad=80;
+  svg.selectAll('*').remove();
+  const symbols=Object.keys(corr);
+  svg.attr('height',pad+symbols.length*size);
+  const scale=d3.scaleLinear().domain([-1,1]).range(['#ef5350','#26a69a']);
+  symbols.forEach((s,i)=>{
+    symbols.forEach((t,j)=>{
+      svg.append('rect')
+        .attr('x',pad+i*size).attr('y',pad+j*size)
+        .attr('width',size).attr('height',size)
+        .attr('fill',scale(corr[s][t]));
+      svg.append('text')
+        .attr('x',pad+i*size+size/2).attr('y',pad+j*size+size/2+4)
+        .attr('text-anchor','middle').attr('font-size','11').attr('fill','#fff')
+        .text(corr[s][t].toFixed(2));
+    });
+    // labels
+    svg.append('text').attr('x',pad+i*size+size/2).attr('y',pad-6)
+      .attr('text-anchor','middle').attr('fill','#fff').text(s);
+    svg.append('text').attr('x',pad-6).attr('y',pad+i*size+size/2+4)
+      .attr('text-anchor','end').attr('fill','#fff').text(s);
+  });
+}
+</script>
+{% endblock %}
