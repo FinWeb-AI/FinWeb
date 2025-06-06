@@ -1,4 +1,3 @@
-# forecast.py
 from flask import Blueprint, render_template, jsonify, request
 from flask_login import login_required
 import yfinance as yf, pandas as pd, numpy as np, datetime, json, math
@@ -9,12 +8,12 @@ try:
 except Exception:
     _prophet = False
 fc_bp = Blueprint("forecast", __name__)
-
+#這邊是預測的路由
 @fc_bp.route("/forecast")
 @login_required
 def forecast():
     return render_template("forecast.html")
-
+# 這邊是預測的 API 路由
 @fc_bp.route("/api/forecast")
 def api_forecast():
     sym   = request.args.get("symbol","BTC-USD")

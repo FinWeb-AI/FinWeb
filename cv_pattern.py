@@ -10,12 +10,12 @@ except Exception:
     model = None
 
 cv_bp = Blueprint("cv_pattern", __name__)
-
+#這邊是電腦視覺模式識別的路由
 @cv_bp.route("/cv-pattern")
 @login_required
 def cv_pattern():
     return render_template("cv_pattern.html")
-
+# 這邊是電腦視覺模式識別的 API 路由
 @cv_bp.route("/api/cv_detect", methods=["POST"])
 def api_cv_detect():
     file = request.files.get("file")
@@ -23,7 +23,7 @@ def api_cv_detect():
         return jsonify([])
     img_bytes = file.read()
     img = cv2.imdecode(np.frombuffer(img_bytes,np.uint8), cv2.IMREAD_COLOR)
-
+#    if img is None:
     dets = []
     if model:
         res = model(img, verbose=False)[0]

@@ -5,13 +5,12 @@ import yfinance as yf, pandas as pd, numpy as np, datetime, warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="yfinance")
 
 pf_bp = Blueprint("portfolio", __name__)
-
+#這邊是投資組合分析的路由
 @pf_bp.route("/portfolio")
 @login_required
 def portfolio_home():
     return render_template("portfolio.html")
-
-
+# 這邊是投資組合分析的 API 路由
 @pf_bp.route("/api/portfolio", methods=["POST"])
 def api_portfolio():
     items = request.get_json(force=True, silent=True) or []
@@ -38,7 +37,7 @@ def api_portfolio():
                 closes[sym] = series.rename(sym)
         except Exception:
             continue
-
+#         如果下載失敗或沒有資料，則忽略該標的
     if len(closes) < 2:
         return jsonify({"error": "無足夠有效資料可計算（至少需要 2 檔）"}), 400
 
@@ -50,7 +49,7 @@ def api_portfolio():
     var = np.percentile(port_ret, 5)
     cvar = port_ret[port_ret <= var].mean()
     corr = returns.corr().round(2).to_dict()
-
+#     將相關係數轉換為字典格式，方便 JSON 序列化
     return jsonify(
         {
             "volatility": round(float(vol), 4),

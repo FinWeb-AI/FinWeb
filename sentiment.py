@@ -9,12 +9,12 @@ except Exception:
     _vader = None
 
 sent_bp = Blueprint("sentiment", __name__)
-
+# 這邊是情緒分析的路由
 @sent_bp.route("/sentiment")
 @login_required
 def sentiment():
     return render_template("sentiment.html")
-
+# 這邊是情緒分析的 API 路由
 @sent_bp.route("/api/sentiment_feed")
 def api_sentiment_feed():
     q = request.args.get("q", "bitcoin")

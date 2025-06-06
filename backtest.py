@@ -8,7 +8,7 @@ bt_bp = Blueprint("backtest", __name__)
 @login_required
 def backtest_home():
     return render_template("backtest.html")
-
+#這邊是回測的 API 路由
 @bt_bp.route("/api/backtest")
 def api_backtest():
     sym  = request.args.get("symbol","AAPL")
@@ -33,7 +33,7 @@ def api_backtest():
         macd  = ema12-ema26
         signal= macd.ewm(span=9, adjust=False).mean()
         df["pos"]=np.where(macd>signal,1,0)
-
+#        df["pos"].ffill(inplace=True)
     df["pos"].iloc[0]=0
     df["strategy_ret"] = df["pos"].shift(1)*df["ret"]
     df["equity"] = (1+df["strategy_ret"]).cumprod()
@@ -44,7 +44,7 @@ def api_backtest():
     sharpe = (df["strategy_ret"].mean()/df["strategy_ret"].std())*np.sqrt(252)
     dd = 1 - df["equity"]/df["equity"].cummax()
     max_dd = dd.max()
-
+#     # 計算最大回撤
     return jsonify({
         "dates": dates,
         "equity": equity,
