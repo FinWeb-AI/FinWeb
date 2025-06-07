@@ -1,92 +1,296 @@
 {% extends "base.html" %}
-{% block title %}資產趨勢分析 - FinWeb{% endblock %}
+{% block title %}首頁 – FinWeb{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">資產趨勢分析</h2>
+<!-- ===== 自訂樣式 ===== -->
+<style>
+  /* Hero 區漸層背景 */
+  .hero {
+    background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+    color: #fff;
+    padding: 5rem 0;
+    border-radius: 0.5rem;
+  }
+  .hero h1 {
+    font-size: 3rem;
+    font-weight: 700;
+  }
+  .hero p {
+    font-size: 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+  /* 玻璃質感卡片 */
+  .card-glass {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(8px);
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  }
+  /* 玻璃質感按鈕 */
+  .btn-glass {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border-radius: 2rem;
+    border: 1px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(4px);
+    transition: background 0.2s;
+  }
+  .btn-glass:hover {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+  }
+  /* 區塊標題 */
+  .section-title {
+    color: #fff;
+    margin-bottom: 2rem;
+    font-weight: 600;
+  }
+  /* 特色功能圖示 */
+  .feature-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 1rem;
+  }
+  /* 快訊卡片文字 */
+  .news-title {
+    color: #fff;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .news-date {
+    color: #ccc;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+  /* LLM 分析預覽 */
+  .home-llm-input {
+    border-radius: 0.5rem;
+    background: rgba(255,255,255,0.05);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+  .home-llm-input::placeholder {
+    color: rgba(255,255,255,0.6);
+  }
+  /* 按鈕排版 */
+  .btn-group-lg .btn {
+    margin-right: 0.5rem;
+  }
+</style>
 
-<form method="post" class="row g-3 align-items-end">
-  <div class="col-auto">
-    <label class="form-label">選擇資產類型：</label><br />
-    <div class="form-check form-check-inline">
-      <input
-        class="form-check-input"
-        type="radio"
-        name="asset_type"
-        id="stock_radio"
-        value="stock"
-        checked
-      />
-      <label class="form-check-label" for="stock_radio">股票</label>
+<!-- ===== 1. Hero 區 ===== -->
+<section class="hero text-center">
+  <div class="container">
+    <h1 class="animate__animated animate__fadeInDown">FinWeb 即時金融資訊平台</h1>
+    <p class="animate__animated animate__fadeInUp animate__delay-1s">
+      整合股票、加密貨幣、AI 智能分析與多種金融工具，一站搞定投資決策所需資訊
+    </p>
+    <div class="btn-group btn-group-lg mt-4 animate__animated animate__fadeInUp animate__delay-2s">
+      <a href="{{ url_for('market_overview') }}" class="btn btn-glass">市場總覽</a>
+      <a href="{{ url_for('crypto') }}" class="btn btn-glass">即時行情</a>
+      <a href="{{ url_for('ai_analysis') }}" class="btn btn-glass">AI 分析</a>
     </div>
-    <div class="form-check form-check-inline">
-      <input
-        class="form-check-input"
-        type="radio"
-        name="asset_type"
-        id="crypto_radio"
-        value="crypto"
-      />
-      <label class="form-check-label" for="crypto_radio">加密貨幣</label>
+  </div>
+</section>
+
+<!-- ===== 2. 特色功能預覽區 ===== -->
+<section class="py-5" style="background-color: #1a2930;">
+  <div class="container">
+    <h2 class="section-title text-center">我們的核心功能</h2>
+    <div class="row g-4">
+      <!-- 市場總覽 -->
+      <div class="col-md-3">
+        <div class="card card-glass text-center p-4 h-100">
+          <img src="{{ url_for('static', filename='icons/overview.svg') }}"
+               alt="市場總覽" class="feature-icon mx-auto d-block">
+          <h6 class="text-white fw-bold">市場總覽</h6>
+          <p class="text-white-50">快速查看台股、加密貨幣及國際主要市場指標。</p>
+          <a href="{{ url_for('market_overview') }}" class="btn btn-glass btn-sm mt-2">馬上前往</a>
+        </div>
+      </div>
+      <!-- 即時行情 (加密 & 股票) -->
+      <div class="col-md-3">
+        <div class="card card-glass text-center p-4 h-100">
+          <img src="{{ url_for('static', filename='icons/crypto.svg') }}"
+               alt="加密貨幣" class="feature-icon mx-auto d-block">
+          <h6 class="text-white fw-bold">即時行情</h6>
+          <p class="text-white-50">Binance USDT 交易對深度、股票即時報價與詳細資訊。</p>
+          <a href="{{ url_for('crypto') }}" class="btn btn-glass btn-sm mt-2">立即查看</a>
+        </div>
+      </div>
+      <!-- 情緒雷達 -->
+      <div class="col-md-3">
+        <div class="card card-glass text-center p-4 h-100">
+          <img src="{{ url_for('static', filename='icons/sentiment.svg') }}"
+               alt="情緒雷達" class="feature-icon mx-auto d-block">
+          <h6 class="text-white fw-bold">情緒雷達</h6>
+          <p class="text-white-50">分析新聞與社群情緒，掌握市場情緒變化。</p>
+          <a href="{{ url_for('sentiment.sentiment') }}" class="btn btn-glass btn-sm mt-2">立即體驗</a>
+        </div>
+      </div>
+      <!-- 圖像辨識 -->
+      <div class="col-md-3">
+        <div class="card card-glass text-center p-4 h-100">
+          <img src="{{ url_for('static', filename='icons/cv.svg') }}"
+               alt="圖像辨識" class="feature-icon mx-auto d-block">
+          <h6 class="text-white fw-bold">圖像辨識</h6>
+          <p class="text-white-50">上傳圖片，使用模型自動偵測常見型態協助技術分析。</p>
+          <a href="{{ url_for('cv_pattern.cv_pattern') }}" class="btn btn-glass btn-sm mt-2">立即體驗</a>
+        </div>
+      </div>
+    </div>
+    <div class="row g-4 mt-4">
+      <!-- AI 預測 -->
+      <div class="col-md-3">
+        <div class="card card-glass text-center p-4 h-100">
+          <img src="{{ url_for('static', filename='icons/forecast.svg') }}"
+               alt="AI 預測" class="feature-icon mx-auto d-block">
+          <h6 class="text-white fw-bold">AI 預測</h6>
+          <p class="text-white-50">
+            使用 Prophet 或線性回歸模型，根據歷史收盤價預測未來走勢。
+          </p>
+          <a href="{{ url_for('forecast.forecast') }}" class="btn btn-glass btn-sm mt-2">立即體驗</a>
+        </div>
+      </div>
+      <!-- 策略回測 -->
+      <div class="col-md-3">
+        <div class="card card-glass text-center p-4 h-100">
+          <img src="{{ url_for('static', filename='icons/backtest.svg') }}"
+               alt="策略回測" class="feature-icon mx-auto d-block">
+          <h6 class="text-white fw-bold">策略回測</h6>
+          <p class="text-white-50">根據過去收盤價計算策略績效與回撤，支援多種指標策略。</p>
+          <a href="{{ url_for('backtest.backtest_home') }}" class="btn btn-glass btn-sm mt-2">馬上回測</a>
+        </div>
+      </div>
+      <!-- 投組風險 -->
+      <div class="col-md-3">
+        <div class="card card-glass text-center p-4 h-100">
+          <img src="{{ url_for('static', filename='icons/portfolio.svg') }}"
+               alt="投組風險" class="feature-icon mx-auto d-block">
+          <h6 class="text-white fw-bold">投組風險</h6>
+          <p class="text-white-50">計算投資組合的 VaR、CVaR 等風險指標。</p>
+          <a href="{{ url_for('portfolio.portfolio_home') }}" class="btn btn-glass btn-sm mt-2">立即分析</a>
+        </div>
+      </div>
+      <!-- AI 分析 -->
+      <div class="col-md-3">
+        <div class="card card-glass text-center p-4 h-100">
+          <img src="{{ url_for('static', filename='icons/ai.svg') }}"
+               alt="AI 分析" class="feature-icon mx-auto d-block">
+          <h6 class="text-white fw-bold">AI 分析</h6>
+          <p class="text-white-50">
+            自動生成市場趨勢解讀、情緒分析及關鍵新聞摘要。
+          </p>
+          <a href="{{ url_for('ai_analysis') }}" class="btn btn-glass btn-sm mt-2">馬上體驗</a>
+        </div>
+      </div>
     </div>
   </div>
+</section>
 
-  <div class="col-auto">
-    <label for="symbol_input" class="form-label">代號：</label>
-    <input
-      list="symbol_list"
-      class="form-control"
-      name="symbol"
-      id="symbol_input"
-      placeholder="請輸入或選擇股票代號"
-      required
-    />
-    <datalist id="symbol_list">
-      {% for sym in all_stocks %}
-      <option value="{{ sym }}"></option>
-      {% endfor %}
-    </datalist>
+<!-- ===== 3. 精選快訊區 ===== -->
+<section class="py-5" style="background-color: #16262b;">
+  <div class="container">
+    <h2 class="section-title text-center">最新公告與快訊</h2>
+    <div class="row g-4">
+      <!-- 範例卡片 1 -->
+      <div class="col-md-4">
+        <div class="card card-glass h-100 p-3">
+          <div class="news-date">2025-06-05</div>
+          <div class="news-title">系統維護公告</div>
+          <p class="text-white-50">
+            系統將於 2025-06-10 06:00 ~ 08:00 進行維護，請提前儲存您的資料。  
+            維護期間部分功能將暫停。
+          </p>
+          <a href="#" class="btn btn-glass btn-sm mt-2">閱讀更多</a>
+        </div>
+      </div>
+      <!-- 範例卡片 2 -->
+      <div class="col-md-4">
+        <div class="card card-glass h-100 p-3">
+          <div class="news-date">2025-05-28</div>
+          <div class="news-title">新增廣告收益分析報表</div>
+          <p class="text-white-50">
+            月度廣告收益統計功能上線，提供多種圖表幫助您優化投資策略。
+          </p>
+          <a href="#" class="btn btn-glass btn-sm mt-2">閱讀更多</a>
+        </div>
+      </div>
+      <!-- 範例卡片 3 -->
+      <div class="col-md-4">
+        <div class="card card-glass h-100 p-3">
+          <div class="news-date">2025-05-20</div>
+          <div class="news-title">Q&A 社區功能上線</div>
+          <p class="text-white-50">
+            全新 Q&A 區域開放，投資人可相互提問與分享交易心得。
+          </p>
+          <a href="#" class="btn btn-glass btn-sm mt-2">閱讀更多</a>
+        </div>
+      </div>
+    </div>
   </div>
+</section>
 
-  <div class="col-auto">
-    <button class="btn btn-primary">分析</button>
+<!-- ===== 4. AI 分析預覽 ===== -->
+<section class="py-5" style="background-color: #1a2930;">
+  <div class="container">
+    <h2 class="section-title text-center">AI 分析預覽</h2>
+    <div class="row align-items-center g-4">
+      <div class="col-lg-6">
+        <p class="text-white-50">
+          輸入股票代號或加密貨幣編碼，FinWeb 的 LLM 將即時生成：
+        </p>
+        <ul class="text-white-50">
+          <li>市場趨勢概覽</li>
+          <li>技術面指標解析</li>
+          <li>相關新聞摘要</li>
+        </ul>
+        <a href="{{ url_for('ai_analysis') }}" class="btn btn-glass mt-3">立即體驗 AI 分析</a>
+      </div>
+      <div class="col-lg-6">
+        <div class="card card-glass p-4">
+          <textarea id="home-llm-input" class="form-control home-llm-input mb-3"
+                    rows="3" placeholder="請輸入：例 2330 台積電"></textarea>
+          <button id="home-llm-btn" class="btn btn-primary w-100">取得範例分析</button>
+          <div id="home-llm-result" class="mt-3 text-white-50">
+            <p>範例：2025-06-06 解析 → 台積電昨日收於 650 元，短期支撐於 640，上方壓力 660，建議觀望或逢低布局⋯⋯</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-</form>
+</section>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const stockRadio = document.getElementById("stock_radio");
-  const cryptoRadio = document.getElementById("crypto_radio");
-  const symbolInput = document.getElementById("symbol_input");
-  const datalist = document.getElementById("symbol_list");
-  const popular_stocks = {{ popular_stocks|tojson }};
-  const popular_cryptos = {{ popular_cryptos|tojson }};
-  const all_stocks = {{ all_stocks|tojson }};
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('home-llm-btn');
+    const input = document.getElementById('home-llm-input');
+    const result = document.getElementById('home-llm-result');
 
-  function updateDatalist() {
-    while (datalist.firstChild) {
-      datalist.removeChild(datalist.firstChild);
-    }
-
-    if (stockRadio.checked) {
-      for (const sym of all_stocks) {
-        const opt = document.createElement("option");
-        opt.value = sym;
-        datalist.appendChild(opt);
+    btn.addEventListener('click', () => {
+      const query = input.value.trim();
+      if (!query) {
+        alert('請先輸入關鍵字！');
+        return;
       }
-      symbolInput.placeholder = "請輸入或選擇股票代號 (如 1101.TW)";
-    } else {
-      for (const [name, sym] of popular_cryptos) {
-        const opt = document.createElement("option");
-        opt.value = sym;
-        datalist.appendChild(opt);
-      }
-      symbolInput.placeholder = "請輸入或選擇加密貨幣代號 (如 bitcoin)";
-    }
-  }
-
-  stockRadio.addEventListener("change", updateDatalist);
-  cryptoRadio.addEventListener("change", updateDatalist);
-  window.addEventListener("DOMContentLoaded", updateDatalist);
+      result.innerHTML = '<p class="text-white-50">載入中...</p>';
+      fetch("/api/llm_analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: query })
+      })
+      .then(res => res.json())
+      .then(data => {
+        result.innerHTML = `<p>${data.result.replace(/\n/g,'<br>')}</p>`;
+      })
+      .catch(err => {
+        console.error(err);
+        result.innerHTML = '<p class="text-danger">取得分析失敗，請稍後再試。</p>';
+      });
+    });
+  });
 </script>
 {% endblock %}
