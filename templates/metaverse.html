@@ -83,15 +83,24 @@ const camera = new THREE.PerspectiveCamera(75, W/H, 1, 12000);
 camera.position.set(0,500,3000);
 
 const gl  = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-gl.setSize(W,H); wrap.appendChild(gl.domElement);
+gl.setSize(W, H);
+wrap.appendChild(gl.domElement);
+
+gl.domElement.style.pointerEvents = "none";
+gl.domElement.style.zIndex        = "0";
 
 const css = new CSS3DRenderer();
-css.setSize(W,H); css.domElement.style.position="absolute"; css.domElement.style.inset="0";
+css.setSize(W, H);
+css.domElement.style.position = "absolute";
+css.domElement.style.inset    = "0";
 wrap.appendChild(css.domElement);
+
+css.domElement.style.pointerEvents = "auto";
+css.domElement.style.zIndex        = "1";
 
 const controls = new OrbitControls(camera, css.domElement);
 controls.enableDamping = true; controls.dampingFactor = .1;
-controls.enablePan = false; controls.minDistance = 800; controls.maxDistance = 6000;
+controls.enablePan = false; controls.minDistance = 1; controls.maxDistance = Infinity;
 
 let isAuto = true;
 function updateMode(){
@@ -129,7 +138,6 @@ window.addEventListener("resize",()=>{
 })();
 
 const NODE=200, nodes=[]; // 隨機生成節點
-const HALF=12000;
 for(let i=0;i<NODE;i++){
   nodes.push(new THREE.Vector3(
     (Math.random()-.5)*8000,
@@ -159,24 +167,43 @@ function clearPanels(){
   panels.length=0; sidebar.innerHTML="";
   if(dragCtrl){ dragCtrl.dispose(); dragCtrl=null; }
 }
-function makeCard(d,i){
-  const card=document.createElement("div");
-  card.className="news-card";
-  card.innerHTML=(d.img?`<img src="${d.img}" class="news-img">`:"")+
-    `<div class="overlay"><h6>${d.title}</h6><small>${d.published}</small></div>`;
-  card.onclick=()=>window.open(d.link,"_blank");
+function makeCard(d, i){
+  const link = document.createElement("a");
+  link.href   = d.link || "#";
+  link.target = "_blank";
+  link.rel    = "noopener noreferrer";
+  link.className = "news-card";
 
-  const obj=new CSS3DObject(card);
-  obj.position.set(0,0,0); scene.add(obj); panels.push(obj);
+  const inner = document.createElement("div");
+  inner.className = "card-inner";
 
-  const end = nodes[Math.floor(Math.random()*NODE)];
+  inner.innerHTML =
+    (d.img ? `<img src="${d.img}" class="news-img">` : "") +
+    `<div class="overlay">
+        <h6>${d.title}</h6>
+        <small>${d.published}</small>
+     </div>`;
+
+  link.appendChild(inner);
+
+  link.addEventListener("pointerdown", e => e.stopPropagation());
+
+  const obj = new CSS3DObject(link);
+  obj.position.set(0, 0, 0);
+  scene.add(obj);
+  panels.push(obj);
+
+  const end = nodes[Math.floor(Math.random() * NODE)];
   new TWEEN.Tween(obj.position)
-    .to({x:end.x,y:end.y,z:end.z},1200+i*100)
-    .easing(TWEEN.Easing.Quadratic.Out).start();
+      .to({ x: end.x, y: end.y, z: end.z }, 1200 + i * 100)
+      .easing(TWEEN.Easing.Quadratic.Out)
+      .start();
 
-  const it=document.createElement("div");
-  it.className="item"; it.innerText=d.title;
-  it.onclick=()=>flyTo(i); sidebar.appendChild(it);
+  const side = document.createElement("div");
+  side.className = "item";
+  side.innerText = d.title;
+  side.onclick   = () => flyTo(i);
+  sidebar.appendChild(side);
 }
 
 async function loadNews(sym){
