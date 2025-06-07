@@ -4,14 +4,38 @@
 {% block content %}
 <h1 class="mb-4">投資組合風險分析</h1>
 
-<div class="card bg-dark text-light">
+<div class="card bg-dark text-light mb-4">
   <div class="card-body">
     <table class="table table-dark table-sm mb-0" id="pf-table">
-      <thead><tr><th>標的</th><th>權重(%)</th><th></th></tr></thead>
+      <thead>
+        <tr>
+          <th style="width:45%">標的</th>
+          <th style="width:45%">權重(%)</th>
+          <th style="width:10%"></th>
+        </tr>
+      </thead>
       <tbody>
-        <tr><td><input class="form-control" value="AAPL"></td><td><input class="form-control" value="40"></td><td></td></tr>
-        <tr><td><input class="form-control" value="TSLA"></td><td><input class="form-control" value="30"></td><td></td></tr>
-        <tr><td><input class="form-control" value="BTC-USD"></td><td><input class="form-control" value="30"></td><td></td></tr>
+        <tr>
+          <td class="pos-rel">
+            <input
+              type="text"
+              class="form-control sym-input bg-dark text-light border-secondary"
+              placeholder="搜尋台股代號／名稱"
+              autocomplete="off"
+            >
+          </td>
+          <td>
+            <input
+              type="number"
+              class="form-control weight-input bg-dark text-light border-secondary"
+              value="40"
+              min="0" max="100" step="0.01"
+            >
+          </td>
+          <td class="text-center">
+            <button class="btn btn-sm btn-outline-danger">&times;</button>
+          </td>
+        </tr>
       </tbody>
     </table>
     <button id="add-row" class="btn btn-outline-light btn-sm mt-2">新增標的</button>
@@ -19,18 +43,26 @@
   </div>
 </div>
 
-<div class="row g-4 mt-4">
+<div class="row g-4">
   <div class="col-lg-4">
     <div class="card bg-dark text-light h-100">
-      <div class="card-header">風險指標</div>
-      <ul class="list-group list-group-flush" id="risk-list"></ul>
+      <div class="card-header">風險 / 報酬指標</div>
+      <ul class="list-group list-group-flush" id="metric-list"></ul>
     </div>
   </div>
   <div class="col-lg-8">
     <div class="card bg-dark text-light h-100">
       <div class="card-header">相關係數熱圖</div>
       <div class="card-body p-0">
-        <svg id="heatmap" width="100%" height="400"></svg>
+        <svg id="heatmap" width="100%" height="420"></svg>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-12">
+    <div class="card bg-dark text-light">
+      <div class="card-header">累積報酬走勢</div>
+      <div class="card-body p-0">
+        <svg id="linechart" width="100%" height="420"></svg>
       </div>
     </div>
   </div>
@@ -39,56 +71,237 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+<style>
+  .pos-rel { position: relative; }
+  .sym-input, .weight-input {
+    padding-right: 28px;
+  }
+  .sym-input::after {
+    content: "";
+    position: absolute;
+    right: 10px; top: 50%;
+    width: 0; height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #aaa;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .ac-box {
+    position: absolute; z-index: 3000;
+    max-height: 300px; overflow-y: auto; width: 100%;
+    background: #1e1e1e; color: #fff;
+    border: 1px solid #555; border-radius: 4px;
+  }
+  .ac-item {
+    padding: 8px; cursor: pointer; white-space: nowrap;
+  }
+  .ac-item:hover,
+  .ac-item.active {
+    background: #357;
+  }
+</style>
+
 <script>
-document.getElementById('add-row').onclick=()=>{
-  const tr=document.createElement('tr');
-  tr.innerHTML='<td><input class="form-control"></td><td><input class="form-control"></td><td></td>';
-  document.querySelector('#pf-table tbody').appendChild(tr);
-};
+  function attachAutocomplete(input) {
+    let box = null, items = [], composing = false;
 
-document.getElementById('pf-run').onclick=async()=>{
-  const rows=[...document.querySelectorAll('#pf-table tbody tr')];
-  const payload=rows.map(r=>({
-    symbol:r.children[0].querySelector('input').value.trim(),
-    weight:parseFloat(r.children[1].querySelector('input').value)
-  })).filter(r=>r.symbol&&r.weight);
+    async function fetchList(q) {
+      const r = await fetch('/api/search_symbol?q=' + encodeURIComponent(q));
+      return await r.json();
+    }
 
-  const res=await fetch('/api/portfolio',{method:'POST',headers:{'Content-Type':'application/json'},
-              body:JSON.stringify(payload)});
-  const dat=await res.json();
+    async function show(q = "") {
+      const list = await fetchList(q);
+      if (!list.length) { destroy(); return; }
+      if (!box) {
+        box = document.createElement('div');
+        box.className = 'ac-box';
+        document.body.appendChild(box);
+      }
+      const r = input.getBoundingClientRect();
+      box.style.left = r.left + window.scrollX + 'px';
+      box.style.top = r.bottom + window.scrollY + 'px';
+      box.style.width = r.width + 'px';
 
-  const ul=document.getElementById('risk-list'); ul.innerHTML='';
-  ['VaR','CVaR','Volatility'].forEach(k=>{
-    const li=document.createElement('li'); li.className='list-group-item bg-dark text-light d-flex justify-content-between';
-    li.innerHTML=`<span>${k}</span><span>${(dat[k.toLowerCase()]*100).toFixed(2)}%</span>`;
+      box.innerHTML = ''; items = [];
+      list.forEach(it => {
+        const div = document.createElement('div');
+        div.className = 'ac-item';
+        div.textContent = `${it.symbol} — ${it.name}`;
+        div.onclick = () => {
+          input.value = it.symbol;
+          destroy();
+        };
+        box.appendChild(div);
+        items.push(div);
+      });
+    }
+
+    function destroy() {
+      if (box) { box.remove(); box = null; items = []; }
+    }
+
+    input.addEventListener('compositionstart', () => composing = true);
+    input.addEventListener('compositionend', () => {
+      composing = false;
+      show(input.value.trim());
+    });
+    input.addEventListener('input', e => {
+      if (composing) return;
+      show(input.value.trim());
+    });
+
+    input.addEventListener('keydown', e => {
+      if (!box) return;
+      const idx = items.findIndex(it => it.classList.contains('active'));
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const ni = idx < items.length - 1 ? idx + 1 : 0;
+        items.forEach(it => it.classList.remove('active'));
+        items[ni].classList.add('active');
+        items[ni].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const ni = idx > 0 ? idx - 1 : items.length - 1;
+        items.forEach(it => it.classList.remove('active'));
+        items[ni].classList.add('active');
+        items[ni].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && idx > -1) {
+        e.preventDefault();
+        items[idx].click();
+      } else if (e.key === 'Escape') {
+        destroy();
+      }
+    });
+
+    document.addEventListener('click', e => {
+      if (box && e.target !== input && !box.contains(e.target)) destroy();
+    });
+  }
+
+  document.querySelectorAll('.sym-input').forEach(attachAutocomplete);
+
+  document.getElementById('add-row').onclick = () => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="pos-rel">
+        <input type="text" class="form-control sym-input bg-dark text-light border-secondary" placeholder="搜尋台股代號／名稱" autocomplete="off">
+      </td>
+      <td>
+        <input type="number" class="form-control weight-input bg-dark text-light border-secondary" min="0" max="100" step="0.01">
+      </td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-danger">&times;</button>
+      </td>`;
+    tr.querySelector('button').onclick = () => tr.remove();
+    document.querySelector('#pf-table tbody').appendChild(tr);
+    attachAutocomplete(tr.querySelector('.sym-input'));
+  };
+
+  document.getElementById('pf-run').onclick = async () => {
+    const rows = [...document.querySelectorAll('#pf-table tbody tr')];
+    const payload = rows.map(r => ({
+      symbol: r.children[0].querySelector('input').value.trim(),
+      weight: parseFloat(r.children[1].querySelector('input').value)
+    })).filter(r => r.symbol && !isNaN(r.weight));
+    if (payload.length < 2) {
+      alert('請至少選兩檔股票');
+      return;
+    }
+    const res = await fetch('/api/portfolio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const dat = await res.json();
+    if (dat.error) {
+      alert(dat.error);
+      return;
+    }
+    renderMetrics(dat.metrics);
+    drawHeat(dat.corr);
+    drawLine(dat.timeseries);
+  };
+
+function renderMetrics(met){
+  const ul=document.getElementById('metric-list'); ul.innerHTML='';
+  const map={'ann_return':'年化報酬','volatility':'年化波動','sharpe':'Sharpe','var':'VaR(95%)','cvar':'CVaR(95%)'};
+  Object.keys(map).forEach(k=>{
+    const li=document.createElement('li');
+    li.className='list-group-item bg-dark text-light d-flex justify-content-between';
+    li.innerHTML=`<span>${map[k]}</span><span id="num-${k}">0</span>`;
     ul.appendChild(li);
+    const tgt=met[k]*100, span=li.querySelector('span:last-child');
+    let cur=0, step=tgt/30;
+    const timer=setInterval(()=>{
+      cur+=step; if(cur>=tgt){ cur=tgt; clearInterval(timer); }
+      span.textContent=k==='sharpe'?cur.toFixed(2):cur.toFixed(2)+'%';
+    },20);
   });
-
-  drawHeat(dat.corr);
-};
+}
 
 function drawHeat(corr){
-  const svg=d3.select('#heatmap'),size=40,pad=80;
+  const svg=d3.select('#heatmap'), size=42, pad=90;
   svg.selectAll('*').remove();
-  const symbols=Object.keys(corr);
-  svg.attr('height',pad+symbols.length*size);
-  const scale=d3.scaleLinear().domain([-1,1]).range(['#ef5350','#26a69a']);
-  symbols.forEach((s,i)=>{
-    symbols.forEach((t,j)=>{
+  const syms=Object.keys(corr);
+  svg.attr('height',pad+syms.length*size);
+  const color=d3.scaleSequential(d3.interpolateRdYlGn).domain([-1,1]);
+  syms.forEach((s,i)=>{
+    syms.forEach((t,j)=>{
       svg.append('rect')
         .attr('x',pad+i*size).attr('y',pad+j*size)
         .attr('width',size).attr('height',size)
-        .attr('fill',scale(corr[s][t]));
+        .attr('fill',color(corr[s][t]));
       svg.append('text')
         .attr('x',pad+i*size+size/2).attr('y',pad+j*size+size/2+4)
         .attr('text-anchor','middle').attr('font-size','11').attr('fill','#fff')
         .text(corr[s][t].toFixed(2));
     });
-    // labels
-    svg.append('text').attr('x',pad+i*size+size/2).attr('y',pad-6)
+    svg.append('text').attr('x',pad+i*size+size/2).attr('y',pad-8)
       .attr('text-anchor','middle').attr('fill','#fff').text(s);
-    svg.append('text').attr('x',pad-6).attr('y',pad+i*size+size/2+4)
+    svg.append('text').attr('x',pad-8).attr('y',pad+i*size+size/2+4)
       .attr('text-anchor','end').attr('fill','#fff').text(s);
+  });
+}
+
+function drawLine(ts){
+  const svg=d3.select('#linechart'); svg.selectAll('*').remove();
+  const width=svg.node().getBoundingClientRect().width,
+        height=420, m={top:40,right:60,bottom:40,left:60};
+  svg.attr('height',height);
+  const data=ts.map(d=>({date:new Date(d.Date), ...d}));
+  const keys=Object.keys(data[0]).filter(k=>k!=='date');
+  const x=d3.scaleTime().domain(d3.extent(data,d=>d.date)).range([m.left,width-m.right]);
+  const y=d3.scaleLinear()
+            .domain([
+              d3.min(data,d=>d3.min(keys,k=>d[k])),
+              d3.max(data,d=>d3.max(keys,k=>d[k]))
+            ]).nice()
+            .range([height-m.bottom,m.top]);
+
+  svg.append('g').attr('transform',`translate(0,${height-m.bottom})`)
+     .call(d3.axisBottom(x).ticks(6).tickSizeOuter(0).tickFormat(d3.timeFormat('%m/%d')));
+  svg.append('g').attr('transform',`translate(${m.left},0)`)
+     .call(d3.axisLeft(y).ticks(6));
+
+  const line=d3.line().x(d=>x(d.date)).y(d=>y(d.value));
+  const color=d3.scaleOrdinal().domain(keys).range(d3.schemeSet2);
+  keys.forEach(k=>{
+    const arr=data.map(d=>({date:d.date,value:d[k]}));
+    svg.append('path').datum(arr)
+       .attr('fill','none')
+       .attr('stroke',k==='Portfolio'?'#fff':color(k))
+       .attr('stroke-width',k==='Portfolio'?2.5:1.5)
+       .attr('d',line);
+    svg.append('text')
+       .attr('x',width-m.right+4)
+       .attr('y',y(arr[arr.length-1].value))
+       .attr('fill',k==='Portfolio'?'#fff':color(k))
+       .attr('font-size','12')
+       .attr('alignment-baseline','middle')
+       .text(k);
   });
 }
 </script>

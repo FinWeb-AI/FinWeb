@@ -38,6 +38,7 @@ from cv_pattern import cv_bp
 from forecast import fc_bp
 from backtest import bt_bp
 from portfolio import pf_bp
+from metaverse import mv_bp
 from trend_analysis import trend_bp
 
 try:
@@ -156,6 +157,7 @@ app.register_blueprint(cv_bp,     url_prefix="/")
 app.register_blueprint(fc_bp,     url_prefix="/")
 app.register_blueprint(bt_bp,     url_prefix="/")
 app.register_blueprint(pf_bp,     url_prefix="/")
+app.register_blueprint(mv_bp, url_prefix="/")
 
 @login_mgr.user_loader
 def load_user(uid: str) -> User | None:
@@ -218,8 +220,8 @@ def account_locked(u: User) -> bool:
 
 # 首頁與其他靜態頁面
 @app.route("/")
-def index():
-    return render_template("index.html")
+def home():
+    return render_template("home.html")
 
 @app.route("/stocks")
 @login_required
@@ -318,7 +320,7 @@ def login():
         if user and user.confirmed and argon2.verify(form.password.data + PEPPER.decode(), user.password):
             login_user(user)
             flash(f"歡迎回來，{user.username}", "success")
-            return redirect(url_for("index"))
+            return redirect(url_for("home"))
         flash("帳號或密碼錯誤，或尚未完成驗證", "danger")
     return render_template("login.html",
                            form=form,
@@ -329,7 +331,7 @@ def login():
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for("index"))
+    return redirect(url_for("home"))
 
 # 加密貨幣與股價相關 API
 PRICE_CACHE  = {}; FAIL_PRICE  = {}

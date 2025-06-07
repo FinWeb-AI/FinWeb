@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}元宇宙新聞 – FinWeb{% endblock %}
+
+{% block content %}
+<div class="position-relative" style="z-index:10000">
+  <div class="d-flex mb-3">
+    <input id="mv-input" type="text" class="form-control me-2" placeholder="輸入標的：如 2330 或 台積電">
+    <button class="btn btn-success me-2" onclick="searchNews()">搜尋</button>
+    <button id="voice-btn" class="btn btn-outline-light" title="語音搜尋"><i class="fas fa-microphone"></i></button>
+  </div>
+</div>
+
+<div id="mv-container"></div>
+
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:10000">
+  <div id="toast-loading" class="toast align-items-center text-white bg-dark border-0" role="alert"
+       aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body">搜尋中...</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+  #mv-container {
+    position: fixed;
+    inset: 70px 0 0 0;
+    overflow: hidden;
+    z-index: 0;
+  }
+
+  .news-card {
+    width: 280px;
+    /* flex 讓內容依序排列 */
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .6);
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  /* 圖片固定 140px 高 */
+  .news-card img.news-img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  /* overlay 改成內容流下一塊 */
+  .news-card .overlay {
+    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, .55);
+    padding: 10px;
+    border-radius: 0 0 8px 8px;
+  }
+  .news-card .overlay h6 {
+    font-size: 16px;
+    margin-bottom: .35rem;
+  }
+  .news-card .overlay small {
+    font-size: 12px;
+    color: #ccc;
+  }
+</style>
+
+<script type="module">
+import * as THREE from "three";
+import { CSS3DRenderer, CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
+import TWEEN from "https://unpkg.com/@tweenjs/tween.js@18.6.4/dist/tween.esm.js";
+
+const input  = document.getElementById("mv-input");
+const toast  = new bootstrap.Toast(document.getElementById("toast-loading"));
+const wrap   = document.getElementById("mv-container");
+
+let W=wrap.clientWidth, H=wrap.clientHeight;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(55,W/H,1,8000);
+camera.position.set(0,350,1200);
+const gl=new THREE.WebGLRenderer({antialias:true,alpha:true});
+gl.setSize(W,H); wrap.appendChild(gl.domElement);
+const css=new CSS3DRenderer();
+css.setSize(W,H); css.domElement.style.position="absolute"; css.domElement.style.inset="0";
+wrap.appendChild(css.domElement);
+
+(()=>{
+  const n=1500, g=new THREE.BufferGeometry(), p=new Float32Array(n*3);
+  for(let i=0;i<p.length;i++) p[i]=(Math.random()-.5)*6000;
+  g.setAttribute("position",new THREE.BufferAttribute(p,3));
+  scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:0.8})));
+})();
+
+const NODE=90, nodes=[];
+for(let i=0;i<NODE;i++){
+  nodes.push(new THREE.Vector3(
+    (Math.random()-.5)*2600,
+    (Math.random()-.5)*1600,
+    (Math.random()-.5)*2600
+  ));
+}
+const MAX_LINKS=Math.floor(NODE*3.5), MAX_DIST=2000, links=[];
+while(links.length/6<MAX_LINKS){
+  const a=nodes[Math.floor(Math.random()*NODE)];
+  const b=nodes[Math.floor(Math.random()*NODE)];
+  if(a!==b && a.distanceTo(b)<MAX_DIST){
+    links.push(a.x,a.y,a.z,b.x,b.y,b.z);
+  }
+}
+const linkGeo=new THREE.BufferGeometry();
+linkGeo.setAttribute("position",new THREE.Float32BufferAttribute(links,3));
+scene.add(new THREE.LineSegments(linkGeo,new THREE.LineBasicMaterial({
+  color:0xffffff,opacity:.25,transparent:true
+})));
+scene.add(new THREE.Points(
+  new THREE.BufferGeometry().setFromPoints(nodes),
+  new THREE.PointsMaterial({color:0xffffff,size:4})
+));
+
+window.addEventListener("resize",()=>{
+  W=wrap.clientWidth; H=wrap.clientHeight;
+  camera.aspect=W/H; camera.updateProjectionMatrix();
+  gl.setSize(W,H); css.setSize(W,H);
+});
+
+const panels=[];
+function clearPanels(){ panels.forEach(o=>scene.remove(o)); panels.length=0; }
+
+function makeCard(d,i){
+  const card=document.createElement("div");
+  card.className="news-card";
+
+  let html="";
+  if(d.img){
+    html+=`<img src="${d.img}" alt="" class="news-img">`;
+  }
+  html+=`
+    <div class="overlay">
+      <h6>${d.title}</h6>
+      <small>${d.published}</small>
+    </div>`;
+  card.innerHTML=html;
+  card.onclick=()=>window.open(d.link,"_blank");
+
+  const obj=new CSS3DObject(card);
+  scene.add(obj);
+  panels.push(obj);
+
+  const end=nodes[Math.floor(Math.random()*NODE)];
+  obj.position.set(0,0,0);
+  new TWEEN.Tween(obj.position)
+    .to({x:end.x,y:end.y,z:end.z},1100+i*100)
+    .easing(TWEEN.Easing.Quadratic.Out)
+    .start();
+}
+
+async function loadNews(sym){
+  toast.show(); clearPanels();
+  try{
+    const res=await fetch(`/api/metaverse_feed?symbol=${encodeURIComponent(sym)}`);
+    const data=await res.json();
+    if(data.error){ alert(data.error); return; }
+    data.forEach((d,i)=>makeCard(d,i));
+  }catch(e){
+    console.error(e);
+    alert("API 錯誤");
+  }finally{
+    toast.hide();
+  }
+}
+
+window.searchNews=()=>{
+  const v=input.value.trim();
+  if(v) loadNews(v);
+  else alert("請輸入標的");
+};
+(()=>{
+  const mic=document.getElementById("voice-btn");
+  if("SpeechRecognition"in window||"webkitSpeechRecognition"in window){
+    const R=window.SpeechRecognition||window.webkitSpeechRecognition;
+    const rec=new R(); rec.lang="zh-TW";
+    rec.onresult=e=>{
+      const t=e.results[0][0].transcript;
+      input.value=t; loadNews(t);
+    };
+    mic.onclick=()=>rec.start();
+  } else mic.style.display="none";
+})();
+
+(function ani(t){
+  requestAnimationFrame(ani);
+  scene.rotation.y+=.0004;
+  TWEEN.update(t);
+  gl.render(scene,camera);
+  css.render(scene,camera);
+})();
+</script>
+{% endblock %}

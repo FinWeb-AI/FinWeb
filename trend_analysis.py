@@ -202,7 +202,7 @@ def trend_home():
         sym = sym.upper() if atype=="stock" else sym.lower()
         return redirect(url_for("trend.trend_result", asset_type=atype, symbol=sym))
     return render_template(
-        "home.html",
+        "trend_home.html",
         popular_stocks=POPULAR_STOCKS,
         popular_cryptos=POPULAR_CRYPTOS,
         all_stocks=ALL_STOCK_SYMBOLS
