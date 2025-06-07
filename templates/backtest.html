@@ -2,57 +2,90 @@
 {% block title %}策略回測 – FinWeb{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">量化策略回測</h1>
+<style>
+:root{--neon:#39ff14;--dark:#111;--card:#1b1b1b;--text:#eee;--ph:#555;}
+body{background:var(--dark);color:var(--text);}
+.neon-border{border:1px solid var(--neon);box-shadow:0 0 8px var(--neon);}
+.btn-neon{border:1px solid var(--neon);color:var(--neon);box-shadow:0 0 8px var(--neon);transition:.3s;}
+.btn-neon:hover{background:var(--neon);color:#111;}
+.input-neon{background:var(--card)!important;border:1px solid var(--neon)!important;color:var(--text)!important;}
+.input-neon::placeholder{color:var(--ph)!important;}
+.form-select.input-neon option{background:var(--card);color:var(--text);}
+label{color:var(--neon);}
+.neon-text{color:var(--neon);text-shadow:0 0 6px var(--neon);}
+.metrics .card{background:var(--card);border:1px solid var(--neon);box-shadow:0 0 8px var(--neon);text-align:center;}
+.chart-wrap{background:var(--card);border:1px solid var(--neon);box-shadow:0 0 8px var(--neon);margin-top:25px;padding:18px;}
+#equity,#dd{width:100%;min-height:300px}
+.nodata{display:flex;align-items:center;justify-content:center;height:300px;color:var(--neon);font-size:22px}
+</style>
 
-<div class="card bg-dark text-light">
-  <div class="card-body">
-    <div class="row g-3 align-items-end">
-      <div class="col-md-4">
-        <label class="form-label">策略</label>
-        <select id="strat-sel" class="form-select">
-          <option value="dma">雙均線</option>
-          <option value="rsi">RSI</option>
-          <option value="macd">MACD</option>
-        </select>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label">標的</label>
-        <input id="bt-symbol" class="form-control" value="AAPL">
-      </div>
-      <div class="col-md-2">
-        <button id="bt-run" class="btn btn-success w-100">執行</button>
-      </div>
-    </div>
+<h2 class="neon-text text-center mb-3">量化策略回測平台</h2>
+
+<div class="card p-4 neon-border">
+  <div class="row g-3 align-items-end">
+    <div class="col-md-2"><label>資產</label>
+      <select id="asset" class="form-select input-neon"><option value="stock">台股</option><option value="crypto">加密貨幣</option></select></div>
+    <div class="col-md-2"><label>策略</label>
+      <select id="strategy" class="form-select input-neon"><option value="dma">DMA</option><option value="rsi">RSI</option><option value="macd">MACD</option></select></div>
+    <div class="col-md-3"><label>標的</label>
+      <select id="symbol" class="form-select input-neon"><option hidden>請選標的</option></select></div>
+    <div class="col-md-2"><label>開始</label><input id="s" type="date" class="form-control input-neon"></div>
+    <div class="col-md-2"><label>結束</label><input id="e" type="date" class="form-control input-neon"></div>
+    <div class="col-md-1 d-grid"><button id="run" class="btn btn-neon">執行</button></div>
   </div>
 </div>
 
-<canvas id="bt-chart" height="380" class="mt-4"></canvas>
+<div class="chart-wrap">
+  <h5 class="neon-text">策略績效圖表</h5>
+  <div id="equity"></div>
+  <div id="dd" style="margin-top:35px"></div>
+</div>
 
-<div class="row text-center mt-3">
-  <div class="col"><h5>總報酬</h5><p id="ret" class="text-success">--%</p></div>
-  <div class="col"><h5>Sharpe</h5><p id="sharpe">--</p></div>
-  <div class="col"><h5>最大回撤</h5><p id="mdd" class="text-danger">--%</p></div>
+<div class="row metrics g-4 mt-4">
+  <div class="col-md-3"><div class="card p-3"><h6>總報酬</h6><p id="m-ret" class="h4 neon-text">--</p></div></div>
+  <div class="col-md-3"><div class="card p-3"><h6>年化報酬</h6><p id="m-ann" class="h4 neon-text">--</p></div></div>
+  <div class="col-md-3"><div class="card p-3"><h6>Sharpe</h6><p id="m-sha" class="h4 neon-text">--</p></div></div>
+  <div class="col-md-3"><div class="card p-3"><h6>最大回撤</h6><p id="m-dd"  class="h4 neon-text">--</p></div></div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
 <script>
-const ctx=document.getElementById('bt-chart');
-const btChart=new Chart(ctx,{type:'line',
-  data:{labels:[],datasets:[{label:'Equity',data:[],borderColor:'#26a69a',pointRadius:0,tension:.2}]},
-  options:{plugins:{legend:{labels:{color:'#fff'}}},scales:{x:{ticks:{color:'#bbb'}},y:{ticks:{color:'#bbb'}}}}
-});
-document.getElementById('bt-run').addEventListener('click',async()=>{
-  const sym=document.getElementById('bt-symbol').value.trim();
-  const strat=document.getElementById('strat-sel').value;
-  const res=await fetch(`/api/backtest?symbol=${sym}&strategy=${strat}`);
-  const d=await res.json();
-  btChart.data.labels=d.dates; btChart.data.datasets[0].data=d.equity;
-  btChart.update();
-  document.getElementById('ret').textContent=(d.total_return*100).toFixed(1)+'%';
-  document.getElementById('sharpe').textContent=d.sharpe.toFixed(2);
-  document.getElementById('mdd').textContent=(d.max_dd*100).toFixed(1)+'%';
-});
+const asset=document.getElementById('asset'), symbol=document.getElementById('symbol');
+const mRet=document.getElementById('m-ret'), mAnn=document.getElementById('m-ann'),
+      mSha=document.getElementById('m-sha'), mDd=document.getElementById('m-dd');
+async function loadSymbols(){
+  const list=await (await fetch('/api/symbols?asset='+asset.value)).json();
+  symbol.innerHTML='<option hidden selected>請選標的</option>';
+  list.forEach(x=>symbol.insertAdjacentHTML('beforeend',`<option>${x}</option>`));
+}
+asset.onchange=loadSymbols; window.onload=loadSymbols;
+
+function draw(dom,opt){
+  let inst=echarts.getInstanceByDom(dom); if(inst) inst.dispose();
+  inst=echarts.init(dom); inst.setOption(opt); window.addEventListener('resize',()=>inst.resize());
+}
+function nodata(dom){dom.innerHTML='<div class="nodata">無資料</div>';let i=echarts.getInstanceByDom(dom);if(i)i.dispose();}
+
+document.getElementById('run').onclick=async()=>{
+  const qs=new URLSearchParams({
+    asset:asset.value, strategy:document.getElementById('strategy').value,
+    symbol:symbol.value, start:document.getElementById('s').value, end:document.getElementById('e').value});
+  if(!qs.get('symbol')||!qs.get('start')||!qs.get('end')) return alert('請填完欄位！');
+  const d=await (await fetch('/api/backtest?'+qs)).json();
+  if(d.error){alert(d.error);return;}
+  if(d.dates.length<2){nodata(equity);nodata(dd);return;}
+
+  const pct=x=>Number.isFinite(x)?(x*100).toFixed(2)+' %':'N/A';
+  mRet.textContent=pct(d.total_return); mAnn.textContent=pct(d.ann_return);
+  mSha.textContent=Number.isFinite(d.sharpe)?d.sharpe.toFixed(2):'N/A';
+  mDd .textContent=pct(d.max_dd);
+
+  draw(equity,{tooltip:{trigger:'axis'},xAxis:{type:'category',data:d.dates},
+    yAxis:{type:'value'},series:[{type:'line',data:d.equity,smooth:true,lineStyle:{color:'#26a69a',width:2}}]});
+  draw(dd,{tooltip:{trigger:'axis'},xAxis:{type:'category',data:d.dates},
+    yAxis:{type:'value'},series:[{type:'line',data:d.drawdown,areaStyle:{},lineStyle:{color:'#f55'}}]});
+};
 </script>
 {% endblock %}
