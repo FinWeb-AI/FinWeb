@@ -139,7 +139,7 @@ def api_sentiment_feed():
         tok_pat   = re.compile(r"[^\w\u4e00-\u9fa5]+")
         MEDIA_STOP = {
             "新聞","日報","報","媒體","News","news","TV",
-            "風傳媒","經濟日報","自由時報","蘋果日報","聯合報","TechNews"
+            "風傳媒","經濟日報","自由時報","蘋果日報","聯合報","TechNews","東森"
         }
         BASIC_STOP = set("的 了 和 是 與 及 在 於 被 人 也 都 更 還 以 不 會".split())
         freq = collections.Counter()

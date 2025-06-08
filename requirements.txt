@@ -33,3 +33,5 @@ wordcloud
 tweepy
 snownlp
 jieba
+prophet
+openai

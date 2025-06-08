@@ -2,63 +2,188 @@
 {% block title %}AI 預測 – FinWeb{% endblock %}
 
 {% block content %}
-<h1 class="mb-4">AI 價格預測</h1>
+<h1 class="mb-4 text-white">AI 價格預測</h1>
 
-<div class="card bg-dark text-light">
-  <div class="card-body">
-    <div class="row g-3 align-items-end">
-      <div class="col-md-4">
-        <label class="form-label">標的</label>
-        <select id="symbol-sel" class="form-select">
-          <option>BTC-USD</option><option>ETH-USD</option>
-          <option>AAPL</option><option>TSLA</option>
-        </select>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label">歷史天數</label>
-        <input id="period-inp" type="number" class="form-control" value="365" min="180" max="1825">
-      </div>
-      <div class="col-md-3">
-        <button id="run-btn" class="btn btn-success w-100">重新預測</button>
-      </div>
+<div class="card bg-dark text-light mb-4 p-3">
+  <div class="row g-3 align-items-end">
+    <div class="col-md-2">
+      <label class="form-label text-light">類別</label>
+      <select id="category-sel" class="form-select bg-secondary text-light">
+        <option value="加密貨幣" selected>加密貨幣</option>
+        <option value="台股">台股</option>
+        <option value="美股">美股</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label text-light">標的</label>
+      <select id="symbol-sel" class="form-select bg-secondary text-light">
+        <option>載入中…</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label text-light">歷史天數</label>
+      <input type="number" id="history-inp" min="180" max="1825" value="365"
+             class="form-control bg-secondary text-light">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label text-light">預測天數</label>
+      <input type="number" id="forecast-inp" min="7" max="90" value="30"
+             class="form-control bg-secondary text-light">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label text-light">模型</label>
+      <select id="model-sel" class="form-select bg-secondary text-light">
+        <option value="prophet" selected>Prophet</option>
+        <option value="linear">線性回歸</option>
+      </select>
+    </div>
+    <div class="col-md-1 d-grid">
+      <button id="run-btn" class="btn btn-success">執行</button>
     </div>
   </div>
 </div>
 
-<canvas id="fc-chart" height="380" class="mt-4"></canvas>
-<div class="text-end text-muted small">MAPE: <span id="mape-val">--</span>%</div>
+<div class="card bg-dark text-light p-3 mb-3">
+  <canvas id="fc-chart" height="350"></canvas>
+</div>
+
+<div class="d-flex justify-content-end text-light mb-4">
+  <div class="me-4">MAPE: <strong id="mape-val">--</strong>%</div>
+  <div>RMSE: <strong id="rmse-val">--</strong></div>
+</div>
+
+<div class="card bg-dark text-light p-3">
+  <h5 class="text-light mb-3">預測結果明細</h5>
+  <div class="table-responsive" style="max-height:300px; overflow-y:auto;">
+    <table class="table table-dark table-striped mb-0">
+      <thead>
+        <tr><th>日期</th><th>預測值</th><th>下限</th><th>上限</th></tr>
+      </thead>
+      <tbody id="forecast-table"></tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script>
-const ctx=document.getElementById('fc-chart');
-const chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[
-  {label:'歷史',data:[],borderColor:'#26a69a',pointRadius:0,tension:.2},
-  {label:'預測',data:[],borderDash:[5,5],borderColor:'#ffc107',pointRadius:3,tension:.2}
-]},options:{plugins:{legend:{labels:{color:'#fff'}}},
-  scales:{x:{ticks:{color:'#bbb'}},y:{ticks:{color:'#bbb'}}}}});
+(async()=>{
+  const $ = id=>document.getElementById(id);
+  const catSel    = $("category-sel"),
+        symSel    = $("symbol-sel"),
+        histInp   = $("history-inp"),
+        futInp    = $("forecast-inp"),
+        modelSel  = $("model-sel"),
+        runBtn    = $("run-btn"),
+        mapeEl    = $("mape-val"),
+        rmseEl    = $("rmse-val"),
+        tableBody = $("forecast-table");
 
-document.getElementById('run-btn').addEventListener('click',run);
-run();
+  let groups = {};
+  try {
+    groups = await (await fetch("/symbols.json")).json();
+  } catch(e) {
+    console.error("載入 symbols 失敗", e);
+  }
 
-async function run(){
-  const sym=document.getElementById('symbol-sel').value;
-  const days=document.getElementById('period-inp').value;
-  const res=await fetch(`/api/forecast?symbol=${sym}&period=${days}`);
-  const {history,future}=await res.json();
-  const labels=[...history.map(r=>r.ds),...future.map(r=>r.ds)];
-  const histData=history.map(r=>r.y);
-  const futData=[...Array(history.length).fill(null),...future.map(r=>r.yhat)];
-  chart.data.labels=labels;
-  chart.data.datasets[0].data=[...histData];
-  chart.data.datasets[1].data=[...futData];
-  chart.update();
+  function refreshSymbols(){
+    const list = groups[catSel.value] || [];
+    symSel.innerHTML = "";
+    if(!list.length){
+      symSel.innerHTML = `<option>無標的</option>`;
+      return;
+    }
+    list.forEach(opt=>{
+      const o = document.createElement("option");
+      o.value       = opt.value;
+      o.textContent = opt.text;
+      symSel.appendChild(o);
+    });
+  }
+  catSel.addEventListener("change", refreshSymbols);
+  refreshSymbols();
 
-  // MAPE
-  let err=0,n=history.slice(-7).length;
-  history.slice(-7).forEach((h,i)=>{err+=Math.abs(h.y-future[i].yhat)/h.y;});
-  document.getElementById('mape-val').textContent=(err/n*100).toFixed(2);
-}
+  const ctx = $("fc-chart").getContext("2d");
+  const fcChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels:[],
+      datasets:[
+        {label:'歷史', data:[], borderColor:'#26a69a', pointRadius:0, tension:0.2},
+        {label:'預測', data:[], borderColor:'#ffc107', borderDash:[5,5], pointRadius:3, tension:0.2},
+        {label:'上下限', data:[], borderColor:'transparent',
+         backgroundColor:'rgba(255,193,7,0.2)', fill:true}
+      ]
+    },
+    options:{
+      responsive:true,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{labels:{color:'#fff'}},
+        zoom:{pan:{enabled:true,mode:'x'},zoom:{wheel:{enabled:true},pinch:{enabled:true},mode:'x'}}
+      },
+      scales:{
+        x:{ticks:{color:'#bbb'},grid:{color:'rgba(255,255,255,0.1)'}},
+        y:{ticks:{color:'#bbb'},grid:{color:'rgba(255,255,255,0.1)'}}
+      }
+    },
+    plugins:[Chart.registry.getPlugin('zoom')]
+  });
+
+  async function runForecast(){
+    runBtn.disabled = true;
+    try {
+      const sym   = encodeURIComponent(symSel.value),
+            hist  = histInp.value,
+            fut   = futInp.value,
+            model = modelSel.value;
+      const res = await fetch(`/api/forecast?symbol=${sym}&history=${hist}&forecast=${fut}&model=${model}`);
+      const js = await res.json();
+      if(!res.ok || js.error){
+      console.error("API 錯誤 Traceback：", js.trace || "(no trace)");
+      throw new Error(js.error || `HTTP ${res.status}`);
+      }
+
+      const { history, future, metrics } = js;
+      const labels = history.map(r=>r.ds).concat(future.map(r=>r.ds));
+      const histY  = history.map(r=>r.y);
+      const futY   = Array(history.length).fill(null).concat(future.map(r=>r.yhat));
+      const up     = Array(history.length).fill(null).concat(future.map(r=>r.yhat_upper));
+      const dn     = Array(history.length).fill(null).concat(future.map(r=>r.yhat_lower));
+      const band   = up.concat(dn.slice().reverse());
+
+      fcChart.data.labels           = labels;
+      fcChart.data.datasets[0].data = histY;
+      fcChart.data.datasets[1].data = futY;
+      fcChart.data.datasets[2].data = band;
+      fcChart.update();
+
+      mapeEl.textContent = metrics.mape.toFixed(2);
+      rmseEl.textContent = metrics.rmse.toFixed(2);
+
+      tableBody.innerHTML = "";
+      future.forEach(r=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${r.ds}</td>
+          <td>${r.yhat.toFixed(2)}</td>
+          <td>${r.yhat_lower.toFixed(2)}</td>
+          <td>${r.yhat_upper.toFixed(2)}</td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    } catch(err) {
+      console.error("runForecast 捕捉到錯誤：", err);
+      alert("執行預測時發生錯誤：\n" + err.message + "\n請看 Console Traceback");
+    } finally {
+      runBtn.disabled = false;
+    }
+  }
+
+  runBtn.addEventListener("click", runForecast);
+  runForecast();
+})();
 </script>
 {% endblock %}

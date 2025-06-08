@@ -1,34 +1,49 @@
 {% extends "base.html" %}
-{% block title %}圖像辨識 – FinWeb{% endblock %}
+{% block title %}蠟燭圖型態辨識 – FinWeb{% endblock %}
 
 {% block content %}
 <h1 class="mb-4">蠟燭圖型態辨識</h1>
-
-<div class="row g-4">
-  <div class="col-lg-7">
-    <div class="card bg-dark text-light h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span>預覽</span>
-        <div>
-          <input type="file" id="img-file" accept="image/*" hidden>
-          <button class="btn btn-outline-light btn-sm me-2" onclick="document.getElementById('img-file').click()">上傳圖片</button>
-          <button id="cam-btn" class="btn btn-outline-success btn-sm">開啟攝影機</button>
-        </div>
-      </div>
-      <div class="card-body p-0 d-flex align-items-center justify-content-center">
-        <canvas id="cv-canvas" style="max-width:100%;max-height:450px;"></canvas>
-        <video id="cv-video" class="d-none" autoplay muted playsinline></video>
-      </div>
+<div class="d-flex gap-3">
+  <div style="flex:6; position:relative;">
+    <div class="d-flex justify-content-end mb-2 gap-2">
+      <label for="img-file" class="btn btn-outline-light btn-sm">上傳圖片</label>
+      <input type="file" id="img-file" accept="image/*" style="display:none;">
+      <button id="cam-btn" class="btn btn-outline-success btn-sm">開啟攝影機</button>
     </div>
+    <canvas id="cv-canvas"
+            class="border border-secondary"
+            style="width:100%; height:480px; background:#000;"></canvas>
+    <video id="cv-video"
+           autoplay muted playsinline
+           style="display:none; width:100%; height:480px; object-fit:cover;"></video>
   </div>
 
-  <div class="col-lg-5">
+  <div style="flex:5; position:relative;">
+    <div class="mb-2 text-end">
+      <small class="text-muted">滑鼠移到柱子上可查看細節</small>
+    </div>
+    <div id="three-container"
+         class="border border-secondary"
+         style="width:100%; height:360px; background:#111;"></div>
+    <div id="three-tooltip" style="
+      position:absolute; padding:6px 8px;
+      background:rgba(0,0,0,0.75); color:#1abc9c;
+      font-size:13px; border-radius:4px;
+      pointer-events:none; display:none;
+    "></div>
+    <canvas id="conf-chart"
+            style="display:none; width:100%; height:120px; margin-top:8px; background:#222;"></canvas>
+  </div>
+
+  <div style="flex:5;">
     <div class="card bg-dark text-light h-100">
       <div class="card-header">偵測結果</div>
+      <ul class="list-group list-group-flush" id="det-list" style="min-height:200px;"></ul>
       <div class="card-body">
-        <ul class="list-group list-group-flush mb-3" id="det-list"></ul>
-        <h5>Gemini 建議</h5>
-        <p id="ai-suggest" class="small text-muted">請先偵測圖像。</p>
+        <h5>AI 建議</h5>
+        <div id="ai-suggest" class="small text-white-50" style="min-height:150px;">
+          請先上傳或啟用攝影機偵測。
+        </div>
       </div>
     </div>
   </div>
@@ -36,87 +51,215 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-const cvs = document.getElementById('cv-canvas');
-const ctx = cvs.getContext('2d');
-const detList = document.getElementById('det-list');
-const suggest = document.getElementById('ai-suggest');
-let stream=null;
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="module">
+  import * as THREE from 'https://unpkg.com/three@0.152.2/build/three.module.js';
+  import { OrbitControls } from 'https://unpkg.com/three@0.152.2/examples/jsm/controls/OrbitControls.js';
 
-document.getElementById('img-file').addEventListener('change',e=>{
-  if(e.target.files.length){
-    const img=new Image();
-    img.onload=()=>{ drawAndDetect(img); };
-    img.src=URL.createObjectURL(e.target.files[0]);
+  let scene, camera, renderer, controls, raycaster;
+  let bars = [];
+  const mouse = new THREE.Vector2();
+
+  function initThree() {
+    const container = document.getElementById('three-container');
+    scene    = new THREE.Scene();
+    camera   = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    camera.position.set(0, 5, 8);
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.GridHelper(10, 10, 0x444444, 0x222222));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+    dl.position.set(5, 10, 5);
+    scene.add(dl, new THREE.AmbientLight(0x404040));
+
+    raycaster = new THREE.Raycaster();
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('resize', onResize);
+    onResize();
+    animate();
   }
-});
 
-document.getElementById('cam-btn').addEventListener('click',async()=>{
-  if(stream){ stopCam(); return; }
-  stream=await navigator.mediaDevices.getUserMedia({video:true});
-  const video=document.getElementById('cv-video');
-  video.srcObject=stream;
-  video.classList.remove('d-none'); cvs.classList.add('d-none');
-  detectLoop(video);
-});
+  function onResize() {
+    const container = document.getElementById('three-container');
+    camera.aspect = container.clientWidth/container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  }
 
-function stopCam(){
-  stream.getTracks().forEach(t=>t.stop());
-  stream=null;
-  document.getElementById('cv-video').classList.add('d-none');
-  cvs.classList.remove('d-none');
-}
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
 
-function drawAndDetect(img){
-  cvs.width=img.width; cvs.height=img.height;
-  ctx.drawImage(img,0,0);
-  detect(cvs.toDataURL());
-}
+  function onPointerMove(e) {
+    const rect = document.getElementById('three-container').getBoundingClientRect();
+    mouse.x = ((e.clientX-rect.left)/rect.width)*2 - 1;
+    mouse.y = -((e.clientY-rect.top)/rect.height)*2 + 1;
+    raycaster.setFromCamera(mouse, camera);
 
-async function detectLoop(video){
-  if(!stream) return;
-  drawAndDetect(video);
-  requestAnimationFrame(()=>detectLoop(video));
-}
+    const tip = document.getElementById('three-tooltip');
+    const hits = raycaster.intersectObjects(bars);
+    if (hits.length) {
+      const { label, conf } = hits[0].object.userData;
+      tip.style.left    = e.clientX + 10 + 'px';
+      tip.style.top     = e.clientY + 10 + 'px';
+      tip.innerText     = `${label}：${Math.round(conf*100)}%`;
+      tip.style.display = 'block';
+    } else {
+      tip.style.display = 'none';
+    }
+  }
 
-async function detect(dataURL){
-  const blob=await (await fetch(dataURL)).blob();
-  const fd=new FormData(); fd.append('file',blob,'img.png');
-  const res=await fetch('/api/cv_detect',{method:'POST',body:fd});
-  const dets=await res.json();
-  drawBoxes(dets);
-  renderList(dets);
-  fetchSuggest(dets);
-}
+  function updateBars(data) {
+    bars.forEach(b => scene.remove(b));
+    bars = [];
+    const gap = 0.7, w = 0.5;
+    data.forEach((d, i) => {
+      const h = d.conf * 3 + 0.2;
+      const geo = new THREE.BoxGeometry(w, h, w);
+      const col = d.conf > 0.75 ? 0x1abc9c : 0xf1c40f;
+      const mat = new THREE.MeshStandardMaterial({ color: col });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set((i - (data.length-1)/2)*gap, h/2, 0);
+      mesh.userData = { label: d.label, conf: d.conf };
+      scene.add(mesh);
+      bars.push(mesh);
+    });
+  }
+  window.updateBars = updateBars;
+  initThree();
 
-function drawBoxes(dets){
-  ctx.lineWidth=2;
-  dets.forEach(d=>{
-    ctx.strokeStyle=d.label==='Positive'?'#26a69a':'#ffc107';
-    const [x1,y1,x2,y2]=d.bbox;
-    ctx.strokeRect(x1,y1,x2-x1,y2-y1);
-    ctx.fillStyle='#fff'; ctx.font='12px sans-serif';
-    ctx.fillText(d.label,x1,y1-4);
+  const chartEl  = document.getElementById('conf-chart');
+  const chartCtx = chartEl.getContext('2d');
+  const confChart = new Chart(chartCtx, {
+    type: 'line',
+    data: { labels: [], datasets: [{ label:'平均信心', data:[], tension:0.3 }] },
+    options: {
+      scales: {
+        y: { min:0, max:1, ticks:{ color:'#fff' } },
+        x: { ticks:{ display:false } }
+      },
+      plugins: { legend:{ labels:{ color:'#fff' }}},
+      responsive:true,
+      maintainAspectRatio:false
+    }
   });
-}
+  chartEl.style.display = 'none';
 
-function renderList(dets){
-  detList.innerHTML='';
-  dets.forEach(d=>{
-    const li=document.createElement('li');
-    li.className='list-group-item bg-dark text-light d-flex justify-content-between';
-    li.innerHTML=`<span>${d.label}</span><span class="text-muted">${(d.conf*100).toFixed(1)}%</span>`;
-    detList.appendChild(li);
+  const cvs    = document.getElementById('cv-canvas');
+  const ctx2d  = cvs.getContext('2d');
+  const video  = document.getElementById('cv-video');
+  const detUl  = document.getElementById('det-list');
+  const suggest = document.getElementById('ai-suggest');
+  const fileIn = document.getElementById('img-file');
+  const camBtn = document.getElementById('cam-btn');
+  let stream   = null;
+
+  fileIn.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const img = new Image();
+    img.onload = () => drawAndDetect(img);
+    img.src    = URL.createObjectURL(f);
   });
-}
 
-async function fetchSuggest(dets){
-  if(!dets.length){suggest.textContent='未偵測到型態';return;}
-  const prompt='以下蠟燭型態: '+dets.map(d=>d.label).join('、')+'，請給台灣散戶簡短交易建議(50字內)。';
-  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
-             body:JSON.stringify({message:prompt})});
-  const {reply}=await res.json();
-  suggest.textContent=reply;
-}
+  camBtn.addEventListener('click', async () => {
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      video.style.display = 'none';
+      cvs.style.display   = 'block';
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      video.style.display = 'block';
+      cvs.style.display   = 'none';
+      detectLoop();
+    } catch {
+      alert('無法開啟攝影機');
+    }
+  });
+
+  function detectLoop() {
+    if (!stream) return;
+    drawAndDetect(video);
+    requestAnimationFrame(detectLoop);
+  }
+
+  async function drawAndDetect(src) {
+    cvs.width  = src.videoWidth || src.width;
+    cvs.height = src.videoHeight || src.height;
+    ctx2d.drawImage(src, 0, 0, cvs.width, cvs.height);
+
+    let dets = [];
+    try {
+      const blob = await (await fetch(cvs.toDataURL())).blob();
+      const fd   = new FormData(); fd.append('file', blob);
+      const res  = await fetch('/api/cv_detect', { method:'POST', body: fd });
+      if (!res.ok) return;
+      dets = await res.json();
+      if (!Array.isArray(dets)) return;
+    } catch(err) {
+      console.error(err);
+      return;
+    }
+
+    detUl.innerHTML = '';
+    dets.forEach(d => {
+      const [x1,y1,x2,y2] = d.bbox.map(v => v*cvs.width);
+      ctx2d.strokeStyle = d.conf>0.75? '#1abc9c':'#f1c40f';
+      ctx2d.lineWidth   = 2;
+      ctx2d.strokeRect(x1,y1,x2-x1,y2-y1);
+      ctx2d.fillStyle   = '#fff';
+      ctx2d.font        = '14px sans-serif';
+      ctx2d.fillText(`${d.label} ${Math.round(d.conf*100)}%`, x1+2, y1+2);
+
+      const li = document.createElement('li');
+      li.className = 'list-group-item bg-dark text-light d-flex justify-content-between';
+      li.innerHTML = `<span>${d.label}</span><span>${Math.round(d.conf*100)}%</span>`;
+      detUl.appendChild(li);
+    });
+
+    updateBars(dets);
+
+    chartEl.style.display = 'block';
+    const avg = dets.reduce((s,d)=>s+d.conf, 0) / dets.length;
+    if (confChart.data.labels.length > 50) {
+      confChart.data.labels.shift();
+      confChart.data.datasets[0].data.shift();
+    }
+    confChart.data.labels.push('');
+    confChart.data.datasets[0].data.push(avg);
+    confChart.update();
+
+    let aiText = '';
+    try {
+      const rr = await fetch('/api/chat', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          message: '以下蠟燭型態：' +
+                   dets.map(d=>d.label).join('、') +
+                   '，請給台灣散戶簡短交易建議(50字內)。'
+        })
+      });
+      if (rr.ok) {
+        aiText = (await rr.json()).reply;
+      } else {
+        aiText = 'AI 建議無法取得';
+      }
+    } catch {
+      aiText = 'AI 服務錯誤';
+    }
+    suggest.textContent = aiText;
+  }
 </script>
 {% endblock %}
