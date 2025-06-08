@@ -25,3 +25,11 @@ vaderSentiment
 prophet
 ultralytics
 feedparser
+snscrape
+pytrends
+textblob.download_corpora
+google-cloud-language
+wordcloud
+tweepy
+snownlp
+jieba

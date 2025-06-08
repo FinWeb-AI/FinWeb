@@ -194,40 +194,18 @@
   <div class="container">
     <h2 class="section-title text-center">最新公告與快訊</h2>
     <div class="row g-4">
-      <!-- 範例卡片 1 -->
+      {% for ann in announcements %}
       <div class="col-md-4">
         <div class="card card-glass h-100 p-3">
-          <div class="news-date">2025-06-05</div>
-          <div class="news-title">系統維護公告</div>
-          <p class="text-white-50">
-            系統將於 2025-06-10 06:00 ~ 08:00 進行維護，請提前儲存您的資料。  
-            維護期間部分功能將暫停。
-          </p>
-          <a href="#" class="btn btn-glass btn-sm mt-2">閱讀更多</a>
+          <div class="news-date">{{ ann.date }}</div>
+          <div class="news-title">{{ ann.title }}</div>
+          <p class="text-white-50">{{ ann.summary }}</p>
+          <a href="{{ url_for('announcements') }}" class="btn btn-glass btn-sm mt-2">
+            閱讀更多
+          </a>
         </div>
       </div>
-      <!-- 範例卡片 2 -->
-      <div class="col-md-4">
-        <div class="card card-glass h-100 p-3">
-          <div class="news-date">2025-05-28</div>
-          <div class="news-title">新增廣告收益分析報表</div>
-          <p class="text-white-50">
-            月度廣告收益統計功能上線，提供多種圖表幫助您優化投資策略。
-          </p>
-          <a href="#" class="btn btn-glass btn-sm mt-2">閱讀更多</a>
-        </div>
-      </div>
-      <!-- 範例卡片 3 -->
-      <div class="col-md-4">
-        <div class="card card-glass h-100 p-3">
-          <div class="news-date">2025-05-20</div>
-          <div class="news-title">Q&A 社區功能上線</div>
-          <p class="text-white-50">
-            全新 Q&A 區域開放，投資人可相互提問與分享交易心得。
-          </p>
-          <a href="#" class="btn btn-glass btn-sm mt-2">閱讀更多</a>
-        </div>
-      </div>
+      {% endfor %}
     </div>
   </div>
 </section>

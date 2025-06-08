@@ -32,6 +32,10 @@ from passlib.hash import argon2
 from sqlalchemy import text
 import yfinance as yf
 import google.generativeai as genai
+import configparser
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from stocks import stock_bp
 from sentiment import sent_bp
 from cv_pattern import cv_bp
@@ -109,6 +113,16 @@ if not GEMINI_API_KEY:
 # 設定 genai 全域 API KEY
 genai.configure(api_key=GEMINI_API_KEY)
 
+# 讀 line key
+LINE_TOKEN  = CFG["LINE"]["CHANNEL_ACCESS_TOKEN"]
+LINE_SECRET = CFG["LINE"]["CHANNEL_SECRET"]
+
+# LINE Bot 設定 (V2 SDK)
+LINE_TOKEN  = CFG["LINE"]["CHANNEL_ACCESS_TOKEN"]
+LINE_SECRET = CFG["LINE"]["CHANNEL_SECRET"]
+line_api     = LineBotApi(LINE_TOKEN)
+line_handler = WebhookHandler(LINE_SECRET)
+
 @login_mgr.unauthorized_handler
 def _unauth():
     # 如果要進 /assistant，就導到登入頁
@@ -157,7 +171,7 @@ app.register_blueprint(cv_bp,     url_prefix="/")
 app.register_blueprint(fc_bp,     url_prefix="/")
 app.register_blueprint(bt_bp,     url_prefix="/")
 app.register_blueprint(pf_bp,     url_prefix="/")
-app.register_blueprint(mv_bp, url_prefix="/")
+app.register_blueprint(mv_bp,     url_prefix="/")
 
 @login_mgr.user_loader
 def load_user(uid: str) -> User | None:
@@ -218,10 +232,56 @@ def block_bad_ua():
 def account_locked(u: User) -> bool:
     return u.locked_until and u.locked_until > int(time.time())
 
+# 定義所有公告（可放在檔案頂端或 home() 上方）
+ALL_ANNOUNCEMENTS = [
+    {
+      "date": "2025-06-05",
+      "title": "系統維護公告",
+      "summary": "系統將於 2025-06-10 06:00 ~ 08:00 維護，請提前儲存您的資料。",
+      "summary_full": "系統將於 2025-06-10 06:00 ~ 08:00 進行維護，請提前儲存您的資料。維護期間部分功能將暫停，造成不便敬請見諒。",
+      "link": None
+    },
+    {
+      "date": "2025-05-28",
+      "title": "新增廣告收益分析報表",
+      "summary": "月度廣告收益統計功能上線，提供多種圖表幫助您優化投資策略。",
+      "summary_full": "平台新增月度廣告收益統計功能，提供長條圖、折線圖與圓餅圖等多種視覺化報表，助您深入了解數據走勢與組合績效。",
+      "link": None
+    },
+    {
+      "date": "2025-05-20",
+      "title": "Q&A 社區功能上線",
+      "summary": "全新 Q&A 區域開放，投資人可相互提問與分享交易心得。",
+      "summary_full": "我們推出了 Q&A 社區，讓使用者能在平台上發布問題、回覆與點讚，促進知識交流與經驗分享。",
+      "link": None
+    },
+    {
+      "date": "2025-04-15",
+      "title": "系統升級公告",
+      "summary": "新增多圖表下載功能，上線時間 2025-04-20。",
+      "summary_full": "本次系統升級加入了 CSV/PNG 一鍵下載功能，並優化了圖表載入速度，預計於 2025-04-20 00:00 上線。",
+      "link": None
+    },
+    {
+      "date": "2025-04-01",
+      "title": "愚人節特別活動",
+      "summary": "4/1 一日限定遊戲，挑戰限時任務領好禮！",
+      "summary_full": "歡慶愚人節，我們準備了限時答題遊戲，完成任務即有機會獲得專屬優惠券，活動僅限 2025-04-01。",
+      "link": None
+    },
+]
+
 # 首頁與其他靜態頁面
 @app.route("/")
+@login_required
 def home():
-    return render_template("home.html")
+    latest_three = ALL_ANNOUNCEMENTS[:3]
+    return render_template("home.html", announcements=latest_three)
+
+@app.route("/announcements")
+@login_required
+def announcements():
+    return render_template("announcements.html", announcements=ALL_ANNOUNCEMENTS)
 
 @app.route("/stocks")
 @login_required
@@ -541,38 +601,50 @@ You are FinWeb AI Financial Assistant, a professional financial analyst and mark
 • 以繁體中文回答，保留專有名詞英語。
 """.strip()
 
+def call_gemini(user_msg: str) -> str:
+    prompt = SYSTEM_PROMPT + "\n\nUser: " + user_msg
+    try:
+        m = genai.GenerativeModel("gemini-1.5-flash-latest")
+        r = m.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.7, max_output_tokens=512,
+                top_p=0.9, top_k=50
+            )
+        )
+        return (r.text or "").strip() or "AI 無回應，請稍後再試。"
+    except Exception:
+        app.logger.exception("Gemini 呼叫失敗")
+        return "AI 呼叫失敗，請稍後再試。"
+
 @app.route("/api/chat", methods=["POST"])
 @login_required
 def api_chat():
-
     user_msg = (request.json or {}).get("message","").strip()
     if not user_msg:
         return jsonify({"reply": ""}), 400
-
-    prompt_text = SYSTEM_PROMPT + "\n\nUser: " + user_msg
-
+    return jsonify({"reply": call_gemini(user_msg)}), 200
+   
+# LINE Webhook 入口
+@app.route("/callback", methods=["POST"])
+def line_callback():
+    signature = request.headers.get("X-Line-Signature", "")
+    body      = request.get_data(as_text=True)
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        line_handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
+    return "OK", 200
 
-        resp = model.generate_content(
-            prompt_text,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.7,
-                max_output_tokens=512,
-                top_p=0.9,
-                top_k=50,
-            )
-        )
-
-        reply = (resp.text or "").strip()
-        if not reply:
-            reply = "AI 無回應，請稍後再試"
-
-        return jsonify({"reply": reply}), 200
-
-    except Exception as e:
-        app.logger.error(f"[api_chat] Gemini 回覆錯誤：{e}", exc_info=True)
-        return jsonify({"reply": "AI 回覆失敗，請稍後再試"}), 200
+@line_handler.add(MessageEvent, message=TextMessage)
+def handle_line_message(event: MessageEvent):
+    user_text = event.message.text.strip()
+    # 直接呼你共用的 call_gemini（或 inline 你的 SYSTEM_PROMPT + genai 呼叫）
+    reply = call_gemini(user_text)
+    line_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=reply)
+    )
 
 if __name__ == "__main__":
     logging.basicConfig(
