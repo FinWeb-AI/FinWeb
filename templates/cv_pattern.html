@@ -4,11 +4,12 @@
 {% block content %}
 <h1 class="mb-4">蠟燭圖型態辨識</h1>
 <div class="d-flex gap-3">
+  <!-- 左側：上傳圖片 / 螢幕擷取 & Canvas -->
   <div style="flex:6; position:relative;">
     <div class="d-flex justify-content-end mb-2 gap-2">
       <label for="img-file" class="btn btn-outline-light btn-sm">上傳圖片</label>
       <input type="file" id="img-file" accept="image/*" style="display:none;">
-      <button id="cam-btn" class="btn btn-outline-success btn-sm">開啟攝影機</button>
+      <button id="cam-btn" class="btn btn-outline-success btn-sm">開啟螢幕擷取</button>
     </div>
     <canvas id="cv-canvas"
             class="border border-secondary"
@@ -18,6 +19,7 @@
            style="display:none; width:100%; height:480px; object-fit:cover;"></video>
   </div>
 
+  <!-- 中間：3D 柱狀 + 平均信心圖 -->
   <div style="flex:5; position:relative;">
     <div class="mb-2 text-end">
       <small class="text-muted">滑鼠移到柱子上可查看細節</small>
@@ -25,24 +27,29 @@
     <div id="three-container"
          class="border border-secondary"
          style="width:100%; height:360px; background:#111;"></div>
-    <div id="three-tooltip" style="
-      position:absolute; padding:6px 8px;
-      background:rgba(0,0,0,0.75); color:#1abc9c;
-      font-size:13px; border-radius:4px;
-      pointer-events:none; display:none;
-    "></div>
-    <canvas id="conf-chart"
-            style="display:none; width:100%; height:120px; margin-top:8px; background:#222;"></canvas>
+    <div id="three-tooltip"
+         style="position:absolute; padding:6px 8px;
+                background:rgba(0,0,0,0.75); color:#1abc9c;
+                font-size:13px; border-radius:4px;
+                pointer-events:none; display:none;"></div>
+
+    <div id="chart-wrapper"
+         style="display:none; height:200px; margin-top:8px; background:#222;">
+      <canvas id="conf-chart"></canvas>
+    </div>
   </div>
 
+  <!-- 右側：清單 & AI 建議 -->
   <div style="flex:5;">
     <div class="card bg-dark text-light h-100">
       <div class="card-header">偵測結果</div>
       <ul class="list-group list-group-flush" id="det-list" style="min-height:200px;"></ul>
       <div class="card-body">
         <h5>AI 建議</h5>
-        <div id="ai-suggest" class="small text-white-50" style="min-height:150px;">
-          請先上傳或啟用攝影機偵測。
+        <div id="ai-suggest"
+             class="small text-white-50"
+             style="min-height:150px;">
+          請先上傳或開啟螢幕擷取偵測。
         </div>
       </div>
     </div>
@@ -56,8 +63,8 @@
   import * as THREE from 'https://unpkg.com/three@0.152.2/build/three.module.js';
   import { OrbitControls } from 'https://unpkg.com/three@0.152.2/examples/jsm/controls/OrbitControls.js';
 
-  let scene, camera, renderer, controls, raycaster;
-  let bars = [];
+  // ----- Three.js 初始化 -----
+  let scene, camera, renderer, controls, raycaster, bars = [];
   const mouse = new THREE.Vector2();
 
   function initThree() {
@@ -99,8 +106,8 @@
 
   function onPointerMove(e) {
     const rect = document.getElementById('three-container').getBoundingClientRect();
-    mouse.x = ((e.clientX-rect.left)/rect.width)*2 - 1;
-    mouse.y = -((e.clientY-rect.top)/rect.height)*2 + 1;
+    mouse.x = ((e.clientX - rect.left)/rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top)/rect.height) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
     const tip = document.getElementById('three-tooltip');
@@ -126,41 +133,60 @@
       const col = d.conf > 0.75 ? 0x1abc9c : 0xf1c40f;
       const mat = new THREE.MeshStandardMaterial({ color: col });
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set((i - (data.length-1)/2)*gap, h/2, 0);
+      mesh.position.set((i - (data.length-1)/2) * gap, h/2, 0);
       mesh.userData = { label: d.label, conf: d.conf };
       scene.add(mesh);
       bars.push(mesh);
     });
   }
-  window.updateBars = updateBars;
+
   initThree();
 
+  // ----- Chart.js：平均信心 -----
   const chartEl  = document.getElementById('conf-chart');
   const chartCtx = chartEl.getContext('2d');
   const confChart = new Chart(chartCtx, {
     type: 'line',
-    data: { labels: [], datasets: [{ label:'平均信心', data:[], tension:0.3 }] },
+    data: {
+      labels: [],
+      datasets: [{
+        label: '平均信心',
+        data: [],
+        tension: 0.3,
+        fill: true,
+        backgroundColor: 'rgba(26,188,156,0.2)',
+        borderColor: '#1abc9c',
+        pointRadius: 8,
+        pointBackgroundColor: '#1abc9c',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2
+      }]
+    },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       scales: {
         y: { min:0, max:1, ticks:{ color:'#fff' } },
         x: { ticks:{ display:false } }
       },
-      plugins: { legend:{ labels:{ color:'#fff' }}},
-      responsive:true,
-      maintainAspectRatio:false
+      plugins: {
+        legend: { labels:{ color:'#fff' } }
+      }
     }
   });
-  chartEl.style.display = 'none';
 
-  const cvs    = document.getElementById('cv-canvas');
-  const ctx2d  = cvs.getContext('2d');
-  const video  = document.getElementById('cv-video');
-  const detUl  = document.getElementById('det-list');
-  const suggest = document.getElementById('ai-suggest');
-  const fileIn = document.getElementById('img-file');
-  const camBtn = document.getElementById('cam-btn');
-  let stream   = null;
+  // ----- DOM & 偵測流程 -----
+  const cvs          = document.getElementById('cv-canvas');
+  const ctx2d        = cvs.getContext('2d');
+  const video        = document.getElementById('cv-video');
+  const detUl        = document.getElementById('det-list');
+  const suggest      = document.getElementById('ai-suggest');
+  const fileIn       = document.getElementById('img-file');
+  const camBtn       = document.getElementById('cam-btn');
+  const chartWrapper = document.getElementById('chart-wrapper');
+  let stream = null;
 
+  // 圖片上傳
   fileIn.addEventListener('change', e => {
     const f = e.target.files[0];
     if (!f) return;
@@ -169,22 +195,25 @@
     img.src    = URL.createObjectURL(f);
   });
 
+  // 螢幕擷取
   camBtn.addEventListener('click', async () => {
     if (stream) {
       stream.getTracks().forEach(t => t.stop());
       stream = null;
       video.style.display = 'none';
       cvs.style.display   = 'block';
+      chartWrapper.style.display = 'none';
       return;
     }
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      video.srcObject = stream;
-      video.style.display = 'block';
-      cvs.style.display   = 'none';
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      video.srcObject      = stream;
+      video.style.display  = 'block';
+      cvs.style.display    = 'none';
       detectLoop();
-    } catch {
-      alert('無法開啟攝影機');
+    } catch (err) {
+      console.error(err);
+      alert('無法擷取螢幕畫面（僅支援 HTTPS 或 localhost）');
     }
   });
 
@@ -194,6 +223,7 @@
     requestAnimationFrame(detectLoop);
   }
 
+  // 偵測並更新各區塊
   async function drawAndDetect(src) {
     cvs.width  = src.videoWidth || src.width;
     cvs.height = src.videoHeight || src.height;
@@ -201,7 +231,7 @@
 
     let dets = [];
     try {
-      const blob = await (await fetch(cvs.toDataURL())).blob();
+      const blob = await new Promise(res => cvs.toBlob(res, 'image/png'));
       const fd   = new FormData(); fd.append('file', blob);
       const res  = await fetch('/api/cv_detect', { method:'POST', body: fd });
       if (!res.ok) return;
@@ -212,10 +242,11 @@
       return;
     }
 
+    // 畫框 & 列表
     detUl.innerHTML = '';
     dets.forEach(d => {
-      const [x1,y1,x2,y2] = d.bbox.map(v => v*cvs.width);
-      ctx2d.strokeStyle = d.conf>0.75? '#1abc9c':'#f1c40f';
+      const [x1,y1,x2,y2] = d.bbox.map(v=>v*cvs.width);
+      ctx2d.strokeStyle = d.conf>0.75 ? '#1abc9c' : '#f1c40f';
       ctx2d.lineWidth   = 2;
       ctx2d.strokeRect(x1,y1,x2-x1,y2-y1);
       ctx2d.fillStyle   = '#fff';
@@ -228,10 +259,12 @@
       detUl.appendChild(li);
     });
 
+    // 三維柱狀
     updateBars(dets);
 
-    chartEl.style.display = 'block';
-    const avg = dets.reduce((s,d)=>s+d.conf, 0) / dets.length;
+    // 顯示 & 更新平均信心圖
+    chartWrapper.style.display = 'block';
+    const avg = dets.reduce((s,d)=>s+d.conf,0) / dets.length;
     if (confChart.data.labels.length > 50) {
       confChart.data.labels.shift();
       confChart.data.datasets[0].data.shift();
@@ -240,22 +273,18 @@
     confChart.data.datasets[0].data.push(avg);
     confChart.update();
 
+    // AI 建議
     let aiText = '';
     try {
       const rr = await fetch('/api/chat', {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
-          message: '以下蠟燭型態：' +
-                   dets.map(d=>d.label).join('、') +
+          message: '以下蠟燭型態：' + dets.map(d=>d.label).join('、') +
                    '，請給台灣散戶簡短交易建議(50字內)。'
         })
       });
-      if (rr.ok) {
-        aiText = (await rr.json()).reply;
-      } else {
-        aiText = 'AI 建議無法取得';
-      }
+      aiText = rr.ok ? (await rr.json()).reply : 'AI 建議無法取得';
     } catch {
       aiText = 'AI 服務錯誤';
     }

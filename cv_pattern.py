@@ -65,7 +65,6 @@ def api_cv_detect():
         logger.error(f"[cv_detect] {e}\n{tb}")
         return jsonify({"error": str(e)}), 500
 
-
 @cv_bp.route("/api/chat", methods=["POST"])
 @login_required
 def api_chat():
@@ -75,16 +74,17 @@ def api_chat():
         return jsonify({"reply": "請提供要詢問的內容"}), 400
 
     try:
-        resp = genai.chat.create(
-            model="chat-bison-001",
-            messages=[{"author": "user", "content": prompt}],
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        gen_cfg = genai.types.GenerationConfig(
             temperature=0.7,
-            max_output_tokens=100
+            max_output_tokens=100,
+            top_p=0.9,
+            top_k=50,
         )
-        reply = resp.choices[0].message.content.strip()
+        resp = model.generate_content(prompt, generation_config=gen_cfg)
+        reply = (resp.text or "").strip() or "AI 無回應，請稍後再試"
         return jsonify({"reply": reply})
 
     except Exception as e:
-        tb = traceback.format_exc()
-        logger.error(f"[api_chat] {e}\n{tb}")
+        logger.error(f"[api_chat] AI 產生錯誤：{e}", exc_info=True)
         return jsonify({"reply": "AI 服務暫時無法使用，請稍後再試"}), 500

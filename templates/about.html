@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}關於我們 – FinWeb{% endblock %}
+
+{% block content %}
+<style>
+  .about-hero {
+    background: linear-gradient(135deg, #2c5364 0%, #0f2027 100%);
+    color: #fff;
+    padding: 6rem 0;
+    text-align: center;
+  }
+  .mission {
+    font-size: 1.25rem;
+    color: #ddd;
+    margin-top: 1rem;
+  }
+  .team-card {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(8px);
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    padding: 2rem;
+    text-align: center;
+    color: #fff;
+    transition: transform .3s;
+  }
+  .team-card:hover {
+    transform: translateY(-6px);
+  }
+  .team-photo {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 50%;
+    margin-bottom: 1rem;
+    border: 3px solid rgba(255,255,255,0.3);
+  }
+  .team-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+  }
+  .team-role {
+    font-size: .95rem;
+    color: #ccc;
+  }
+</style>
+
+<section class="about-hero">
+  <div class="container">
+    <h1 class="animate__animated animate__fadeInDown">關於 FinWeb</h1>
+    <p class="animate__animated animate__fadeInUp animate__delay-1s mission">
+      我們致力於打造最專業、好用、免費的即時金融資訊平台，
+      結合大數據、AI 與可視化工具，助您做出更聰明的投資決策。
+    </p>
+  </div>
+</section>
+
+<section class="py-5" style="background-color:#16262b;">
+  <div class="container">
+    <h2 class="section-title text-center text-white mb-5">我們的團隊</h2>
+    <div class="row g-4">
+      <!-- 團隊成員 Card 範例 -->
+      <div class="col-md-4">
+        <div class="team-card h-100">
+          <img src="{{ url_for('static', filename='img/team/alice.jpg') }}"
+               alt="Alice" class="team-photo mx-auto d-block">
+          <div class="team-name">Alice Chen</div>
+          <div class="team-role">創辦人 & 首席分析師</div>
+          <p class="mt-2 text-white-50">
+            金融業十年經驗，擅長量化研究與大數據分析。
+          </p>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="team-card h-100">
+          <img src="{{ url_for('static', filename='img/team/bob.jpg') }}"
+               alt="Bob" class="team-photo mx-auto d-block">
+          <div class="team-name">Bob Lin</div>
+          <div class="team-role">技術長</div>
+          <p class="mt-2 text-white-50">
+            全棧工程師，負責平台後端與 AI 服務整合。
+          </p>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="team-card h-100">
+          <img src="{{ url_for('static', filename='img/team/cindy.jpg') }}"
+               alt="Cindy" class="team-photo mx-auto d-block">
+          <div class="team-name">Cindy Wu</div>
+          <div class="team-role">產品經理</div>
+          <p class="mt-2 text-white-50">
+            專注使用者體驗設計，打造易用又直覺的介面。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center mt-5">
+      <p class="text-white-50">
+        想加入我們？請寄履歷至 career@finweb.example
+      </p>
+      <a href="mailto:career@finweb.example" class="btn btn-glass btn-lg">加入團隊</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "member/base_member.html" %}
+{% block member_content %}
+<h1 class="text-2xl font-bold mb-4">帳單與訂閱</h1>
+<form method="POST">
+  {{ form.hidden_tag() }}
+  <div>{{ form.membership_level.label }} {{ form.membership_level() }}</div>
+  <button type="submit" class="btn-primary">{{ form.submit.label.text }}</button>
+</form>
+<p class="mt-3">目前狀態：<strong>{{ status }}</strong></p>
+{% endblock %}

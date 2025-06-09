@@ -1,0 +1,18 @@
+{% extends "member/base_member.html" %}
+{% block member_content %}
+<h1 class="text-2xl font-bold mb-4">API 金鑰管理</h1>
+<form method="POST">
+  {{ form.hidden_tag() }}
+  <button type="submit" class="btn-primary">{{ form.submit_new_key.label.text }}</button>
+</form>
+<ul class="mt-4">
+  {% for key in keys %}
+    <li>
+      {{ key.key }}
+      <form method="POST" action="{{ url_for('member.delete_api_key', key_id=key.id) }}" style="display:inline">
+        <button type="submit" class="btn-secondary btn-sm">刪除</button>
+      </form>
+    </li>
+  {% endfor %}
+</ul>
+{% endblock %}

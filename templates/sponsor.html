@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}贊助我們 – FinWeb{% endblock %}
+
+{% block content %}
+<style>
+  .sponsor-hero {
+    background: linear-gradient(135deg, #203a43 0%, #0f2027 100%);
+    color: #fff;
+    padding: 6rem 0;
+    text-align: center;
+  }
+  .tier-card {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(8px);
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    color: #fff;
+    padding: 2rem;
+    transition: transform .3s;
+  }
+  .tier-card:hover {
+    transform: translateY(-8px);
+  }
+  .tier-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: .5rem;
+  }
+  .tier-price {
+    font-size: 2rem;
+    font-weight: 800;
+    margin: .5rem 0 1rem;
+  }
+  .tier-features li {
+    margin-bottom: .5rem;
+  }
+  .contact-btn {
+    background: #26a69a;
+    border: none;
+    color: #fff;
+    padding: .75rem 1.5rem;
+    border-radius: 2rem;
+    transition: background .2s;
+  }
+  .contact-btn:hover { background: #2dd7b5; }
+</style>
+
+<section class="sponsor-hero">
+  <div class="container">
+    <h1 class="animate__animated animate__fadeInDown">支持 FinWeb 的未來</h1>
+    <p class="animate__animated animate__fadeInUp animate__delay-1s">
+      您的贊助將幫助我們持續開發更多專業、免費的金融工具與服務。
+    </p>
+  </div>
+</section>
+
+<section class="py-5" style="background-color:#16262b;">
+  <div class="container">
+    <h2 class="section-title text-center text-white mb-5">贊助方案</h2>
+    <div class="row g-4">
+      <!-- Bronze -->
+      <div class="col-md-4">
+        <div class="tier-card h-100">
+          <div class="tier-name">Bronze 青銅</div>
+          <div class="tier-price">$50 / 月</div>
+          <ul class="tier-features list-unstyled">
+            <li>★ 平台感謝致謝</li>
+            <li>★ 每月最新功能預告</li>
+            <li>★ 專屬社群徽章</li>
+          </ul>
+          <button class="btn-outline-light btn btn-sm mt-3">立即贊助</button>
+        </div>
+      </div>
+      <!-- Silver -->
+      <div class="col-md-4">
+        <div class="tier-card h-100">
+          <div class="tier-name">Silver 銀牌</div>
+          <div class="tier-price">$150 / 月</div>
+          <ul class="tier-features list-unstyled">
+            <li>★ Bronze 所有權益</li>
+            <li>★ 專屬每月財經報告</li>
+            <li>★ 線上 Q&A 優先權</li>
+          </ul>
+          <button class="btn-outline-light btn btn-sm mt-3">立即贊助</button>
+        </div>
+      </div>
+      <!-- Gold -->
+      <div class="col-md-4">
+        <div class="tier-card h-100">
+          <div class="tier-name">Gold 黃金</div>
+          <div class="tier-price">$300 / 月</div>
+          <ul class="tier-features list-unstyled">
+            <li>★ Silver 所有權益</li>
+            <li>★ 一對一專屬諮詢</li>
+            <li>★ API 高優先限額</li>
+          </ul>
+          <button class="btn-outline-light btn btn-sm mt-3">立即贊助</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center mt-5">
+      <p class="text-white-50">
+        若有其他合作意向，歡迎透過 contact@finweb.example 與我們聯繫。
+      </p>
+      <a href="mailto:contact@finweb.example" class="contact-btn">聯絡我們</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

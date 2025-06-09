@@ -1,0 +1,12 @@
+{% extends "member/base_member.html" %}
+{% block member_content %}
+<h1 class="text-2xl font-bold mb-4">安全中心</h1>
+<form method="POST">
+  {{ form.hidden_tag() }}
+  <h2 class="font-semibold">更改密碼</h2>
+  <div>{{ form.old_password.label }} {{ form.old_password() }}</div>
+  <div>{{ form.new_password.label }} {{ form.new_password() }}</div>
+  <div>{{ form.confirm_new_password.label }} {{ form.confirm_new_password() }}</div>
+  <button type="submit" name="submit_password" class="btn-primary">{{ form.submit_password.label.text }}</button>
+</form>
+{% endblock %}

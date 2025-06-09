@@ -1,0 +1,16 @@
+{% extends "member/base_member.html" %}
+{% block member_content %}
+<h1 class="text-2xl font-bold mb-4">團隊：{{ team.name }}</h1>
+<h2 class="font-semibold">成員</h2>
+<ul>
+  {% for m in members %}
+    <li>{{ m.user.email }} (加入時間 {{ m.joined | datetimeformat }})</li>
+  {% endfor %}
+</ul>
+<h2 class="font-semibold mt-4">邀請新成員</h2>
+<form method="POST">
+  {{ form.hidden_tag() }}
+  <div>{{ form.email.label }} {{ form.email() }}</div>
+  <button type="submit" class="btn-primary">{{ form.submit.label.text }}</button>
+</form>
+{% endblock %}

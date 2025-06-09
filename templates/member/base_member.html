@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block head %}
+  {{ super() }}
+  <style>
+    /* --- Layout --- */
+    #member-layout {
+      display: flex;
+      min-height: 100vh;
+    }
+    /* 側欄 */
+    #member-sidebar {
+      flex: 0 0 220px;
+      width: 220px;
+      position: fixed;
+      top: 56px; bottom: 0; left: 0;
+      background: linear-gradient(180deg, #556cd6, #8e44ad);
+      color: #fff;
+      padding-top: 1rem;
+      overflow-y: auto;
+      z-index: 1020;
+    }
+    /* 側欄連結 */
+    #member-sidebar .nav-link {
+      color: #fff;
+      padding: 0.75rem 1rem;
+    }
+    #member-sidebar .nav-link.active,
+    #member-sidebar .nav-link:hover {
+      background: rgba(255,255,255,0.15);
+    }
+    /* 主區 */
+    #member-main {
+      margin-left: 220px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #0f141c;
+      padding: 1.5rem;
+    }
+    .member-content {
+      flex: 1;
+    }
+
+    /* --- 指標卡 --- */
+    .metric-card .card-body {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 140px;
+    }
+    .metric-title {
+      font-size: 1rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+    .metric-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      line-height: 1;
+      font-family: 'Roboto', sans-serif;
+    }
+
+    /* 圖表卡 固定高度 */
+    .card-chart {
+      height: 360px;
+    }
+
+    /* dark card */
+    .card-dark {
+      background-color: #1f2937;
+      color: #fff;
+      border: none;
+    }
+    .card-dark .card-header,
+    .card-dark .card-body {
+      background-color: #1f2937;
+    }
+
+    /* 漸層工具類 */
+    .gradient-green-blue { background: linear-gradient(90deg,#a8ff78,#78ffd6)!important; }
+    .gradient-purple     { background: linear-gradient(90deg,#7b2ff7,#f107a3)!important; }
+    .gradient-yellow-orange { background: linear-gradient(90deg,#fddb92,#d1fdff)!important; }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div id="member-layout">
+  <aside id="member-sidebar">
+    <nav class="nav flex-column">
+      <a class="nav-link {% if request.endpoint=='member.dashboard' %}active{% endif %}"
+         href="{{ url_for('member.dashboard') }}">
+        <i class="fas fa-tachometer-alt me-2"></i>儀表板
+      </a>
+      <a class="nav-link {% if request.endpoint=='member.profile' %}active{% endif %}"
+         href="{{ url_for('member.profile') }}">
+        <i class="fas fa-user me-2"></i>個人檔案
+      </a>
+      <a class="nav-link {% if request.endpoint=='member.settings' %}active{% endif %}"
+         href="{{ url_for('member.settings') }}">
+        <i class="fas fa-cog me-2"></i>帳戶設定
+      </a>
+      <a class="nav-link {% if request.endpoint=='member.security' %}active{% endif %}"
+         href="{{ url_for('member.security') }}">
+        <i class="fas fa-shield-alt me-2"></i>安全中心
+      </a>
+      <a class="nav-link {% if request.endpoint=='member.subscription' %}active{% endif %}"
+         href="{{ url_for('member.subscription') }}">
+        <i class="fas fa-file-invoice-dollar me-2"></i>帳單與訂閱
+      </a>
+      <a class="nav-link {% if request.endpoint=='member.api_keys' %}active{% endif %}"
+         href="{{ url_for('member.api_keys') }}">
+        <i class="fas fa-key me-2"></i>API 金鑰
+      </a>
+      <a class="nav-link {% if request.endpoint=='member.teams' %}active{% endif %}"
+         href="{{ url_for('member.teams') }}">
+        <i class="fas fa-users me-2"></i>團隊管理
+      </a>
+      <a class="nav-link {% if request.endpoint=='member.audit_logs' %}active{% endif %}"
+         href="{{ url_for('member.audit_logs') }}">
+        <i class="fas fa-book me-2"></i>稽核日誌
+      </a>
+      <a class="nav-link {% if request.endpoint=='member.notifications' %}active{% endif %}"
+         href="{{ url_for('member.notifications') }}">
+        <i class="fas fa-bell me-2"></i>通知
+      </a>
+      <a class="nav-link {% if request.endpoint=='member.data_export' %}active{% endif %}"
+         href="{{ url_for('member.data_export') }}">
+        <i class="fas fa-download me-2"></i>資料匯出
+      </a>
+    </nav>
+    <div class="mt-auto">
+      <a class="nav-link" href="{{ url_for('logout') }}">
+        <i class="fas fa-sign-out-alt me-2"></i>登出
+      </a>
+    </div>
+  </aside>
+
+  <main id="member-main">
+    <section class="member-content">
+      {% block member_content %}{% endblock %}
+    </section>
+  </main>
+</div>
+{% endblock %}

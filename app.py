@@ -7,13 +7,17 @@ import requests
 import time
 import re
 import hashlib
-import hmac
+from sqlalchemy.orm import synonym
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+from cryptography.fernet import Fernet,InvalidToken
+import base64
 
+FERNET_KEY = "9gfBuQFUmVv1_iGpUk3X8N3zPBsGPv0TQlf60OjYH9U="
+f = Fernet(FERNET_KEY.encode())
 from flask import (
     Flask, render_template, request, redirect,
-    url_for, jsonify, flash, abort, session
+    url_for, jsonify, flash, abort, session, Blueprint
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -23,19 +27,23 @@ from flask_login import (
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField
+from wtforms import (
+    StringField, PasswordField, SubmitField,
+    SelectField, FileField
+)
 from wtforms.validators import DataRequired, Email, EqualTo, Length
 from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from passlib.hash import argon2
-from sqlalchemy import text
+from sqlalchemy import text, ForeignKey,func
 import yfinance as yf
 import google.generativeai as genai
-import configparser
+
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
+
 from stocks import stock_bp
 from sentiment import sent_bp
 from cv_pattern import cv_bp
@@ -47,7 +55,7 @@ from trend_analysis import trend_bp
 
 try:
     from zoneinfo import ZoneInfo
-except Exception:
+except ImportError:
     class ZoneInfo:
         def __init__(self, key="UTC"):
             self.key = key
@@ -81,17 +89,17 @@ limiter = Limiter(
 app.config.update(
     SQLALCHEMY_DATABASE_URI        = f"sqlite:///{DB_PATH}",
     SQLALCHEMY_TRACK_MODIFICATIONS = False,
-    MAIL_SERVER         = CFG["Email"]["MAIL_SERVER"],
-    MAIL_PORT           = int(CFG["Email"]["MAIL_PORT"]),
-    MAIL_USE_TLS        = CFG["Email"].getboolean("MAIL_USE_TLS", False),
-    MAIL_USE_SSL        = CFG["Email"].getboolean("MAIL_USE_SSL", False),
-    MAIL_USERNAME       = CFG["Email"]["MAIL_USERNAME"],
-    MAIL_PASSWORD       = CFG["Email"]["MAIL_PASSWORD"],
-    MAIL_DEFAULT_SENDER = CFG["Email"]["MAIL_DEFAULT_SENDER"],
-    RECAPTCHA_SITE_KEY  = CFG["ReCAPTCHA"].get("SITE_KEY", ""),
-    RECAPTCHA_SECRET_KEY= CFG["ReCAPTCHA"].get("SECRET_KEY", ""),
-    WTF_CSRF_ENABLED    = False,
-    SESSION_COOKIE_SECURE = False
+    MAIL_SERVER                   = CFG["Email"]["MAIL_SERVER"],
+    MAIL_PORT                     = int(CFG["Email"]["MAIL_PORT"]),
+    MAIL_USE_TLS                  = CFG["Email"].getboolean("MAIL_USE_TLS", False),
+    MAIL_USE_SSL                  = CFG["Email"].getboolean("MAIL_USE_SSL", False),
+    MAIL_USERNAME                 = CFG["Email"]["MAIL_USERNAME"],
+    MAIL_PASSWORD                 = CFG["Email"]["MAIL_PASSWORD"],
+    MAIL_DEFAULT_SENDER           = CFG["Email"]["MAIL_DEFAULT_SENDER"],
+    RECAPTCHA_SITE_KEY            = CFG["ReCAPTCHA"].get("SITE_KEY", ""),
+    RECAPTCHA_SECRET_KEY          = CFG["ReCAPTCHA"].get("SECRET_KEY", ""),
+    WTF_CSRF_ENABLED              = False,
+    SESSION_COOKIE_SECURE         = False
 )
 
 # PEPPER 用於加強密碼安全
@@ -137,25 +145,86 @@ def _unauth():
 
 # 使用者資料表
 class User(UserMixin, db.Model):
-    id            = db.Column(db.Integer, primary_key=True)
-    username      = db.Column(db.String(80),  unique=True, nullable=False)
-    email         = db.Column(db.String(120), unique=True, nullable=False)
-    password      = db.Column(db.String(128), nullable=False)
-    created       = db.Column(db.Integer, default=lambda: int(time.time()))
-    confirm_code  = db.Column(db.String(6))
-    confirm_expire= db.Column(db.Integer)
-    confirmed     = db.Column(db.Boolean, default=False)
-    failed_login  = db.Column(db.Integer, default=0)
-    locked_until  = db.Column(db.Integer)
+    id                  = db.Column(db.Integer, primary_key=True)
+    username            = db.Column(db.String(80),  unique=True, nullable=False)
+    _email              = db.Column("email", db.LargeBinary, nullable=False)
+    email_hash          = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    password            = db.Column(db.String(128), nullable=False)
+    created             = db.Column(db.Integer, default=lambda: int(time.time()))
+    confirm_code        = db.Column(db.String(6))
+    confirm_expire      = db.Column(db.Integer)
+    confirmed           = db.Column(db.Boolean, default=False)
+    failed_login        = db.Column(db.Integer, default=0)
+    locked_until        = db.Column(db.Integer)
+    avatar_url          = db.Column(db.String(256))
+    timezone            = db.Column(db.String(64), default="UTC")
+    language            = db.Column(db.String(8), default="zh-TW")
+    last_login          = db.Column(db.Integer)
+    membership_level    = db.Column(db.String(32), default="free")
+    subscription_status = db.Column(db.String(32), default="inactive")
+    two_factor_secret   = db.Column(db.String(64))
+    @property
+    def email(self) -> str:
+        try:
+            return f.decrypt(self._email).decode()
+        except InvalidToken:
+            return ""
 
+    @email.setter
+    def email(self, val: str):
+        self._email = f.encrypt(val.encode())
+        self.email_hash = hashlib.sha256(val.encode()).hexdigest()
+
+    email = synonym('_email', descriptor=email)
+    
+class ApiKey(db.Model):
+    id        = db.Column(db.Integer, primary_key=True)
+    user_id   = db.Column(db.Integer, ForeignKey("user.id"), nullable=False)
+    key       = db.Column(db.String(64), unique=True, nullable=False)
+    created   = db.Column(db.Integer, default=lambda: int(time.time()))
+
+class Team(db.Model):
+    id        = db.Column(db.Integer, primary_key=True)
+    name      = db.Column(db.String(100), nullable=False)
+    owner_id  = db.Column(db.Integer, ForeignKey("user.id"), nullable=False)
+    created   = db.Column(db.Integer, default=lambda: int(time.time()))
+
+class TeamMember(db.Model):
+    id        = db.Column(db.Integer, primary_key=True)
+    team_id   = db.Column(db.Integer, ForeignKey("team.id"), nullable=False)
+    user_id   = db.Column(db.Integer, ForeignKey("user.id"), nullable=False)
+    role      = db.Column(db.String(32), default="member")
+    joined    = db.Column(db.Integer, default=lambda: int(time.time()))
+
+class PortfolioItem(db.Model):
+    __tablename__ = 'portfolio_item'
+    id        = db.Column(db.Integer, primary_key=True)
+    user_id   = db.Column(db.Integer, ForeignKey("user.id"), nullable=False)
+    symbol    = db.Column(db.String(20), nullable=False)
+    quantity  = db.Column(db.Float,   nullable=False, default=0.0)
+
+class ApiCallLog(db.Model):
+    __tablename__ = 'api_call_log'
+    id        = db.Column(db.Integer, primary_key=True)
+    user_id   = db.Column(db.Integer, ForeignKey("user.id"), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
 with app.app_context():
     db.create_all()
     col_defs = {
-        "confirm_code"  : "TEXT",
-        "confirm_expire": "INTEGER",
-        "confirmed"     : "BOOLEAN DEFAULT 0",
-        "failed_login"  : "INTEGER DEFAULT 0",
-        "locked_until"  : "INTEGER"
+        "email_hash":          "TEXT UNIQUE",
+        "confirm_code":        "TEXT",
+        "confirm_expire":      "INTEGER",
+        "confirmed":           "BOOLEAN DEFAULT 0",
+        "failed_login":        "INTEGER DEFAULT 0",
+        "locked_until":        "INTEGER",
+        "avatar_url":          "TEXT",
+        "timezone":            "TEXT DEFAULT 'UTC'",
+        "language":            "TEXT DEFAULT 'zh-TW'",
+        "last_login":          "INTEGER",
+        "membership_level":    "TEXT DEFAULT 'free'",
+        "subscription_status": "TEXT DEFAULT 'inactive'",
+        "two_factor_secret":   "TEXT"
     }
     existing = {row["name"] for row in db.session.execute(
         text("PRAGMA table_info(user)")).mappings()
@@ -194,6 +263,43 @@ class LoginForm(_F):
     password = PasswordField(validators=[DataRequired()])
     submit   = SubmitField()
 
+# 會員中心 Forms
+class ProfileForm(_F):
+    avatar   = FileField()
+    username = StringField(validators=[DataRequired(),Length(3,20)])
+    email    = StringField(validators=[DataRequired(),Email()])
+    submit   = SubmitField("儲存變更")
+
+class SettingsForm(_F):
+    timezone = SelectField("時區", choices=[("UTC","UTC"),("Asia/Taipei","Asia/Taipei")])
+    language = SelectField("語言", choices=[("zh-TW","繁體中文"),("en-US","English")])
+    submit   = SubmitField("儲存設定")
+
+class SecurityForm(_F):
+    old_password         = PasswordField(validators=[DataRequired()])
+    new_password         = PasswordField(validators=[DataRequired(),Length(6,64)])
+    confirm_new_password = PasswordField(validators=[EqualTo("new_password")])
+    submit_password      = SubmitField("更新密碼")
+    enable_2fa           = SubmitField("啟用 2FA")
+
+class SubscriptionForm(_F):
+    membership_level = SelectField(
+        "方案等級",
+        choices=[("free","免費"),("pro","進階"),("enterprise","企業")])
+    submit           = SubmitField("更新訂閱")
+
+class ApiKeyForm(_F):
+    submit_new_key = SubmitField("產生新 API Key")
+
+class TeamForm(_F):
+    name   = StringField("團隊名稱", validators=[DataRequired(), Length(3,50)])
+    submit = SubmitField("新增團隊")
+
+class InviteForm(_F):
+    email  = StringField("邀請人電子郵件", validators=[DataRequired(),Email()])
+    team_id= StringField(validators=[DataRequired()])
+    submit = SubmitField("發送邀請")
+    
 # reCAPTCHA 驗證
 def verify_recaptcha(tok: str) -> bool:
     secret = app.config["RECAPTCHA_SECRET_KEY"]
@@ -271,6 +377,10 @@ ALL_ANNOUNCEMENTS = [
     },
 ]
 
+@app.template_filter('comma_separator')
+def comma_separator_filter(val):
+    return f"{val:,.0f}"
+
 # 首頁與其他靜態頁面
 @app.route("/")
 @login_required
@@ -308,50 +418,72 @@ def ai_analysis():
 def market_overview():
     return render_template("market_overview.html")
 
+@app.route("/sponsor")
+@login_required
+def sponsor():
+    return render_template("sponsor.html")
+
+@app.route("/about")
+def about():
+    return render_template("about.html")
+
 # 使用者註冊
-@app.route("/register", methods=["GET","POST"])
+@app.route("/register", methods=["GET", "POST"])
 @limiter.limit("5 per minute")
 def register():
     form = RegisterForm()
     if form.validate_on_submit():
-        tok = request.form.get("g-recaptcha-response","")
+        # reCAPTCHA 驗證
+        tok = request.form.get("g-recaptcha-response", "")
         if not verify_recaptcha(tok):
             flash("請完成 reCAPTCHA 驗證", "danger")
+        # 使用者名稱不可重複
         elif User.query.filter_by(username=form.username.data).first():
             flash("使用者名稱已存在", "danger")
-        elif User.query.filter_by(email=form.email.data.lower()).first():
-            flash("此信箱已註冊過", "danger")
         else:
-            code   = f"{uuid.uuid4().int % 1_000_000:06d}"
-            expire = int(time.time()) + 3600
-            hashed = argon2.hash(form.password.data + PEPPER.decode())
-            user = User(
-                username       = form.username.data,
-                email          = form.email.data.lower(),
-                password       = hashed,
-                confirm_code   = code,
-                confirm_expire = expire
-            )
-            db.session.add(user)
-            db.session.commit()
-            try:
-                send_verification_email(user)
-                flash("註冊成功！驗證碼已寄至信箱", "success")
-            except Exception as e:
-                app.logger.error(f"mail send error: {e}")
-                flash("註冊成功，但郵件發送失敗，請檢查信箱設定", "danger")
-            return redirect(url_for("confirm"))
-    return render_template("register.html",
-                           form=form,
-                           recaptcha_site_key=app.config["RECAPTCHA_SITE_KEY"])
+            # Email 欄位先做 SHA256 hash 查重
+            raw_email = form.email.data.lower().strip()
+            email_hash = hashlib.sha256(raw_email.encode()).hexdigest()
+            if User.query.filter_by(email_hash=email_hash).first():
+                flash("此信箱已註冊過", "danger")
+            else:
+                # 產生驗證碼與過期時間
+                code   = f"{uuid.uuid4().int % 1_000_000:06d}"
+                expire = int(time.time()) + 3600
+                # 密碼 Argon2 雜湊
+                hashed = argon2.hash(form.password.data + PEPPER.decode())
+                # 建立 User，setter 會同時設定 _email 與 email_hash
+                user = User(
+                    username       = form.username.data,
+                    email          = raw_email,
+                    password       = hashed,
+                    confirm_code   = code,
+                    confirm_expire = expire
+                )
+                db.session.add(user)
+                db.session.commit()
+                # 寄驗證信
+                try:
+                    send_verification_email(user)
+                    flash("註冊成功！驗證碼已寄至信箱", "success")
+                except Exception as e:
+                    app.logger.error(f"mail send error: {e}")
+                    flash("註冊成功，但郵件發送失敗，請檢查信箱設定", "danger")
+                return redirect(url_for("confirm"))
+    return render_template(
+        "register.html",
+        form=form,
+        recaptcha_site_key=app.config["RECAPTCHA_SITE_KEY"]
+    )
 
-# 電子郵件驗證頁面
-@app.route("/confirm", methods=["GET","POST"])
+
+@app.route("/confirm", methods=["GET", "POST"])
 def confirm():
     if request.method == "POST":
-        email = request.form.get("email","").lower().strip()
-        code  = request.form.get("code","").strip()
-        user  = User.query.filter_by(email=email).first()
+        raw_email = request.form.get("email", "").lower().strip()
+        code      = request.form.get("code", "").strip()
+        email_hash = hashlib.sha256(raw_email.encode()).hexdigest()
+        user = User.query.filter_by(email_hash=email_hash).first()
         if not user:
             flash("查無此信箱帳號", "danger")
         elif user.confirmed:
@@ -370,21 +502,25 @@ def confirm():
             return redirect(url_for("login"))
     return render_template("confirm.html")
 
-# 使用者登入
-@app.route("/login", methods=["GET","POST"])
-@limiter.limit("10 per minute")
+
+@app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data.lower()).first()
+        raw_email = form.email.data.lower().strip()
+        email_hash = hashlib.sha256(raw_email.encode()).hexdigest()
+        user = User.query.filter_by(email_hash=email_hash).first()
         if user and user.confirmed and argon2.verify(form.password.data + PEPPER.decode(), user.password):
             login_user(user)
             flash(f"歡迎回來，{user.username}", "success")
             return redirect(url_for("home"))
         flash("帳號或密碼錯誤，或尚未完成驗證", "danger")
-    return render_template("login.html",
-                           form=form,
-                           recaptcha_site_key=app.config["RECAPTCHA_SITE_KEY"])
+    return render_template(
+        "login.html",
+        form=form,
+        recaptcha_site_key=app.config["RECAPTCHA_SITE_KEY"]
+    )
 
 # 使用者登出
 @app.route("/logout")
@@ -516,6 +652,227 @@ def api_ohlc():
         FAIL_OHLC[key] = time.time()
         app.logger.error(f"/api_ohlc error: {e}")
         return jsonify({"error":"not found"}), 200
+
+member_bp = Blueprint(
+    'member',
+    __name__,
+    template_folder='member',
+    url_prefix='/member'
+)
+
+@member_bp.route('/audit_logs')
+@login_required
+def audit_logs():
+    # TODO:
+    return render_template('member/audit_logs.html')
+
+
+@member_bp.route('/notifications')
+@login_required
+def notifications():
+    # TODO:
+    return render_template('member/notifications.html')
+
+
+@member_bp.route('/data_export')
+@login_required
+def data_export():
+    # TODO:
+    return render_template('member/data_export.html')
+
+@member_bp.route('/dashboard')
+@login_required
+def dashboard():
+    uid = current_user.id
+
+    items = PortfolioItem.query.filter_by(user_id=uid).all()
+    total = 0.0
+    for it in items:
+        info  = yf.Ticker(it.symbol).fast_info
+        price = info.get("last_price", 0)
+        total += it.quantity * price
+
+    yesterday = datetime.utcnow() - timedelta(hours=24)
+    prev_total = 0.0
+    for it in items:
+        hist = yf.Ticker(it.symbol).history(
+            start=yesterday, end=yesterday + timedelta(minutes=1)
+        )
+        if not hist.empty:
+            prev_price = hist['Close'].iloc[0]
+            prev_total += it.quantity * prev_price
+
+    change_pct = ((total - prev_total) / prev_total * 100) if prev_total else 0
+
+    today_start = datetime.combine(datetime.utcnow().date(), datetime.min.time())
+    api_calls = ApiCallLog.query.filter(
+        ApiCallLog.user_id==uid,
+        ApiCallLog.timestamp >= today_start
+    ).count()
+
+    asset_trend = [
+      {'label':'1 天前',     'value': round(prev_total)},
+      {'label':'12 小時前',  'value': round((prev_total + total)/2)},
+      {'label':'現在',       'value': round(total)},
+    ]
+
+    portfolio_dist = []
+    for it in items:
+        info  = yf.Ticker(it.symbol).fast_info
+        price = info.get("last_price", 0)
+        portfolio_dist.append({
+            'label': it.symbol,
+            'value': it.quantity * price
+        })
+
+    return render_template(
+        'member/dashboard.html',
+        total_assets   = round(total,2),
+        change_24h     = round(change_pct,2),
+        api_calls      = api_calls,
+        asset_trend    = asset_trend,
+        portfolio_dist = portfolio_dist
+    )
+
+@member_bp.route('/profile', methods=['GET','POST'])
+@login_required
+def profile():
+    form = ProfileForm()
+    if form.validate_on_submit():
+        user = current_user
+        f = form.avatar.data
+        if f:
+            ext = os.path.splitext(f.filename)[1]
+            fn  = f"avatar_{user.id}{ext}"
+            path = os.path.join(app.static_folder, 'uploads', fn)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            f.save(path)
+            user.avatar_url = url_for('static', filename=f'uploads/{fn}')
+        user.username = form.username.data
+        user.email    = form.email.data
+        db.session.commit()
+        flash("個人檔案已更新", "success")
+        return redirect(url_for('member.profile'))
+    if request.method=='GET':
+        form.username.data = current_user.username
+        form.email.data    = current_user.email
+    return render_template('member/profile.html', form=form)
+
+@member_bp.route('/settings', methods=['GET','POST'])
+@login_required
+def settings():
+    form = SettingsForm()
+    if form.validate_on_submit():
+        user = current_user
+        user.timezone = form.timezone.data
+        user.language = form.language.data
+        db.session.commit()
+        flash("帳戶設定已儲存", "success")
+        return redirect(url_for('member.settings'))
+    if request.method=='GET':
+        form.timezone.data = current_user.timezone
+        form.language.data = current_user.language
+    return render_template('member/settings.html', form=form)
+
+@member_bp.route('/security', methods=['GET','POST'])
+@login_required
+def security():
+    form = SecurityForm()
+    if form.validate_on_submit():
+        user = current_user
+        if form.submit_password.data:
+            if argon2.verify(form.old_password.data + PEPPER.decode(), user.password):
+                user.password = argon2.hash(form.new_password.data + PEPPER.decode())
+                db.session.commit()
+                flash("密碼已更新", "success")
+            else:
+                flash("舊密碼不正確", "danger")
+        if form.enable_2fa.data:
+            flash("2FA 功能尚在開發中", "info")
+        return redirect(url_for('member.security'))
+    return render_template('member/security.html', form=form)
+
+@member_bp.route('/subscription', methods=['GET','POST'])
+@login_required
+def subscription():
+    form = SubscriptionForm()
+    if form.validate_on_submit():
+        current_user.membership_level = form.membership_level.data
+        current_user.subscription_status = 'active'
+        db.session.commit()
+        flash("訂閱方案已更新", "success")
+        return redirect(url_for('member.subscription'))
+    if request.method=='GET':
+        form.membership_level.data = current_user.membership_level
+    return render_template('member/subscription.html',
+                          form=form,
+                          status=current_user.subscription_status)
+
+@member_bp.route('/api-keys', methods=['GET','POST'])
+@login_required
+def api_keys():
+    form = ApiKeyForm()
+    keys = ApiKey.query.filter_by(user_id=current_user.id).all()
+    if form.validate_on_submit():
+        new_key = uuid.uuid4().hex
+        ak = ApiKey(user_id=current_user.id, key=new_key)
+        db.session.add(ak)
+        db.session.commit()
+        flash("已產生新 API Key", "success")
+        return redirect(url_for('member.api_keys'))
+    return render_template('member/api_keys.html',
+                           form=form,
+                           keys=keys)
+
+@member_bp.route('/api-keys/delete/<int:key_id>', methods=['POST'])
+@login_required
+def delete_api_key(key_id):
+    ak = ApiKey.query.get_or_404(key_id)
+    if ak.user_id != current_user.id:
+        abort(403)
+    db.session.delete(ak)
+    db.session.commit()
+    flash("API Key 已刪除", "success")
+    return redirect(url_for('member.api_keys'))
+
+@member_bp.route('/teams', methods=['GET','POST'])
+@login_required
+def teams():
+    form = TeamForm()
+    teams = Team.query.filter_by(owner_id=current_user.id).all()
+    if form.validate_on_submit():
+        t = Team(name=form.name.data, owner_id=current_user.id)
+        db.session.add(t)
+        db.session.commit()
+        flash("團隊已建立", "success")
+        return redirect(url_for('member.teams'))
+    return render_template('member/teams.html',
+                           form=form,
+                           teams=teams)
+
+@member_bp.route('/teams/<int:team_id>', methods=['GET','POST'])
+@login_required
+def team_detail(team_id):
+    team = Team.query.get_or_404(team_id)
+    if team.owner_id != current_user.id:
+        abort(403)
+    members = TeamMember.query.filter_by(team_id=team.id).all()
+    form = InviteForm()
+    if form.validate_on_submit():
+        u = User.query.filter_by(email=form.email.data.lower()).first()
+        if u:
+            tm = TeamMember(team_id=team.id, user_id=u.id)
+            db.session.add(tm)
+            db.session.commit()
+            flash(f"已邀請 {u.email}", "success")
+        else:
+            flash("查無此使用者", "danger")
+        return redirect(url_for('member.team_detail', team_id=team.id))
+    return render_template('member/team_detail.html',
+                           team=team,
+                           members=members,
+                           form=form)
+app.register_blueprint(member_bp)
 
 @app.route("/api/market_summary")
 @login_required

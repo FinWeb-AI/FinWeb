@@ -1,0 +1,51 @@
+{% extends "member/base_member.html" %}
+
+{% block title %}個人檔案 – FinWeb{% endblock %}
+
+{% block member_content %}
+  <div class="d-flex justify-content-center">
+    <div class="w-100" style="max-width: 500px;">
+      <h2 class="text-white mb-4">編輯個人檔案</h2>
+      <form method="POST" enctype="multipart/form-data"
+            class="card card-dark p-4 shadow">
+        {{ form.hidden_tag() }}
+
+        <div class="mb-4 text-center">
+          <img id="avatarPreview"
+               src="{{ current_user.avatar_url or url_for('static', filename='img/default-avatar.png') }}"
+               class="rounded-circle mb-2"
+               width="100" height="100" />
+          <div>
+            {{ form.avatar(class_="form-control form-control-sm d-inline-block w-auto") }}
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label text-white">使用者名稱</label>
+          {{ form.username(class_="form-control bg-dark text-light") }}
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-white">電子郵件</label>
+          {{ form.email(class_="form-control bg-dark text-light") }}
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">儲存變更</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    const avatarInput = document.querySelector('input[type="file"][name="avatar"]');
+    const avatarPreview = document.getElementById('avatarPreview');
+    avatarInput?.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => avatarPreview.src = ev.target.result;
+      reader.readAsDataURL(file);
+    });
+  </script>
+{% endblock %}
