@@ -5,36 +5,25 @@
 <h1 class="mb-4">股票走勢查詢（批次即時價＋折線圖）</h1>
 
 <div class="row gy-4">
-  <div class="col-lg-3">
-    <div class="card bg-dark text-light mb-3">
-      <div class="card-header">台股上市類股</div>
-      <ul class="list-group list-group-flush bg-dark">
-        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
-            data-category="上市_電子零組件">電子零組件</li>
-        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
-            data-category="上市_半導體">半導體</li>
-        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
-            data-category="上市_光電">光電</li>
-        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
-            data-category="上市_電子通路">電子通路</li>
-      </ul>
+  <div class="col-lg-3 d-flex flex-column" style="height:80vh;">
+    <div class="mb-3">
+      <input id="category-search" type="text" class="form-control" placeholder="搜尋產業或代號/名稱…">
     </div>
-
-    <div class="card bg-dark text-light">
+    <div class="card bg-dark text-light mb-3 flex-fill d-flex flex-column">
+      <div class="card-header">台股上市類股</div>
+      <div class="card-body p-0 overflow-auto">
+        <ul id="listed-list" class="list-group list-group-flush bg-dark"></ul>
+      </div>
+    </div>
+    <div class="card bg-dark text-light flex-fill d-flex flex-column">
       <div class="card-header">台股上櫃類股</div>
-      <ul class="list-group list-group-flush bg-dark">
-        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
-            data-category="上櫃_光電">光電</li>
-        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
-            data-category="上櫃_生技">生技</li>
-        <li class="list-group-item list-group-item-dark cursor-pointer category-item"
-            data-category="上櫃_半導體">半導體</li>
-      </ul>
+      <div class="card-body p-0 overflow-auto">
+        <ul id="otc-list" class="list-group list-group-flush bg-dark"></ul>
+      </div>
     </div>
   </div>
 
   <div class="col-lg-9">
-
     <div class="card bg-dark text-light mb-4">
       <div id="members-header" class="card-header">
         請先點選左側「類股」
@@ -43,20 +32,11 @@
         <table id="members-table" class="table table-dark table-striped table-hover mb-0">
           <thead>
             <tr>
-              <th scope="col">股票名稱／代號</th>
-              <th scope="col">股價</th>
-              <th scope="col">漲跌</th>
-              <th scope="col">漲跌幅(%)</th>
-              <th scope="col">成交量</th>
-              <th scope="col">時間</th>
+              <th>股票名稱／代號</th><th>股價</th><th>漲跌</th><th>漲跌幅(%)</th><th>成交量</th><th>時間</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colspan="6" class="text-center text-muted">
-                尚未選擇類股
-              </td>
-            </tr>
+            <tr><td colspan="6" class="text-center text-muted">尚未選擇類股</td></tr>
           </tbody>
         </table>
       </div>
@@ -64,13 +44,11 @@
 
     <div class="row gx-4">
       <div class="col-lg-4">
-        <div id="price-card" class="card bg-dark text-light mb-3" style="display: none;">
+        <div id="price-card" class="card bg-dark text-light mb-3" style="display:none;">
           <div class="card-header" id="price-header">—</div>
-          <div class="card-body" id="price-body">
-          </div>
+          <div class="card-body" id="price-body"></div>
         </div>
       </div>
-
       <div class="col-lg-8">
         <div class="card bg-dark text-light mb-3">
           <div class="card-header" id="chart-header">—</div>
@@ -80,7 +58,6 @@
         </div>
       </div>
     </div>
-
   </div>
 </div>
 {% endblock %}
@@ -89,205 +66,218 @@
 {% block scripts %}
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const categoryEls   = document.querySelectorAll(".category-item");
+
+  const listedList    = document.getElementById("listed-list");
+  const otcList       = document.getElementById("otc-list");
   const membersHeader = document.getElementById("members-header");
   const membersTbody  = document.querySelector("#members-table tbody");
-
   const priceCard     = document.getElementById("price-card");
   const priceHeader   = document.getElementById("price-header");
   const priceBody     = document.getElementById("price-body");
-
   const chartHeader   = document.getElementById("chart-header");
   const ctx           = document.getElementById("trend-chart").getContext("2d");
+  const searchInput   = document.getElementById("category-search");
+
+  let categoriesData = { 上市: [], 上櫃: [] };
+
+  const style = document.createElement("style");
+  style.textContent = `
+    .stock-row.highlight {
+      background-color: rgba(38, 166, 154, 0.3) !important;
+    }
+  `;
+  document.head.append(style);
 
   const trendChart = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        label: 'Price',
-        data: [],
-        borderColor: '#26a69a',
-        backgroundColor: 'transparent',
-        borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.2,
-      }]
-    },
+    data: { labels: [], datasets: [{ label:'Price', data:[], borderColor:'#26a69a',
+      backgroundColor:'transparent', borderWidth:2, pointRadius:0, tension:0.2 }] },
     options: {
       animation: false,
       scales: {
-        x: {
-          ticks: { color: '#bbb', maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
-          grid: { color: '#444' }
-        },
-        y: {
-          ticks: { color: '#bbb', callback: v => v.toLocaleString() },
-          grid: { color: '#444' }
-        }
+        x: { ticks:{ color:'#bbb', maxRotation:0, autoSkip:true, maxTicksLimit:12 },
+             grid:{ color:'#444' } },
+        y: { ticks:{ color:'#bbb', callback: v=>v.toLocaleString() },
+             grid:{ color:'#444' } }
       },
-      plugins: {
-        legend: { labels: { color: '#fff' } }
-      }
+      plugins:{ legend:{ labels:{ color:'#fff' } } }
     }
   });
 
-  categoryEls.forEach(li => {
-    li.addEventListener("click", async () => {
-      categoryEls.forEach(x => x.classList.remove("active"));
-      li.classList.add("active");
+  async function loadCategories() {
+    try {
+      const resp = await fetch('/stocks/api/stock_categories');
+      categoriesData = await resp.json();
+      populate(listedList, categoriesData['上市']);
+      populate(otcList,    categoriesData['上櫃']);
+    } catch {
+      listedList.innerHTML = `<li class="list-group-item text-danger">載入失敗</li>`;
+      otcList   .innerHTML = `<li class="list-group-item text-danger">載入失敗</li>`;
+    }
+  }
 
-      const category = li.dataset.category; 
-      membersHeader.textContent = `${category.replace(/_/g," / ")} 成分股列表`;
+  function populate(ulEl, items) {
+    if (!items || !items.length) {
+      ulEl.innerHTML = `<li class="list-group-item text-warning">無可用類股</li>`;
+      return;
+    }
+    ulEl.innerHTML = items.map(i => `
+      <li class="list-group-item list-group-item-dark cursor-pointer category-item"
+          data-category="${i.key}">${i.label}</li>
+    `).join('');
+    ulEl.querySelectorAll('.category-item').forEach(li =>
+      li.addEventListener('click', () => onCategoryClick(li))
+    );
+  }
 
-      membersTbody.innerHTML = `
-        <tr>
-          <td colspan="6" class="text-center text-light">載入中…請稍候</td>
-        </tr>
-      `;
+  async function onCategoryClick(li) {
 
-      let members = [];
-      try {
-        const resp = await fetch(`/stocks/api/stock_category_members?category=${encodeURIComponent(category)}`);
-        if (!resp.ok) throw new Error(`status ${resp.status}`);
-        members = await resp.json();
-      } catch (err) {
-        console.error("[stock_category_members] 錯誤", err);
-        membersTbody.innerHTML = `
-          <tr>
-            <td colspan="6" class="text-center text-danger">載入成分股失敗</td>
-          </tr>`;
-        return;
-      }
+    document.querySelectorAll('.category-item.active')
+      .forEach(x => x.classList.remove('active'));
+    li.classList.add('active');
 
+    const cat = li.dataset.category;
+    membersHeader.textContent = cat.replace(/_/g,' / ') + ' 成分股列表';
+    membersTbody.innerHTML = `<tr><td colspan="6" class="text-center text-light">載入中…</td></tr>`;
+
+    try {
+      const resp = await fetch(`/stocks/api/stock_category_members?category=${encodeURIComponent(cat)}`);
+      const members = resp.ok ? await resp.json() : [];
       if (!members.length) {
-        membersTbody.innerHTML = `
-          <tr>
-            <td colspan="6" class="text-center text-warning">此類股目前無成分股</td>
-          </tr>`;
+        membersTbody.innerHTML = `<tr><td colspan="6" class="text-center text-warning">此類股無成分股</td></tr>`;
         return;
       }
 
       membersTbody.innerHTML = members.map(item => {
-        const priceStr  = (item.price  !== null && item.price  !== undefined) ? item.price.toLocaleString() : "—";
-        const changeStr = (item.change !== null && item.change !== undefined)
-                          ? (item.change >= 0 ? `▲ ${item.change.toLocaleString()}` : `▼ ${Math.abs(item.change).toLocaleString()}`)
-                          : "—";
-        const pctStr    = (item.pct    !== null && item.pct    !== undefined)
-                          ? (item.pct >= 0 ? `▲ ${item.pct.toFixed(2)}%` : `▼ ${Math.abs(item.pct).toFixed(2)}%`)
-                          : "—";
-        const volStr    = (item.volume !== null && item.volume !== undefined) ? item.volume.toLocaleString() : "—";
-        const timeStr   = item.time || "—";
-
-        let colorClass = "";
-        if (item.change !== null && item.change !== undefined) {
-          colorClass = (item.change >= 0) ? "text-success" : "text-danger";
-        }
-
+        const p   = item.price!=null?item.price.toLocaleString():'—';
+        const ch  = item.change;
+        const cls = ch!=null?(ch>=0?'text-success':'text-danger'):'';
+        const chs = ch!=null?(ch>=0?`▲ ${ch}`:`▼ ${Math.abs(ch)}`):'—';
+        const pct = item.pct!=null?(item.pct>=0?`▲ ${item.pct.toFixed(2)}%`:`▼ ${Math.abs(item.pct).toFixed(2)}%`):'—';
+        const vol = item.volume!=null?item.volume.toLocaleString():'—';
+        const t   = item.time||'—';
         return `
-          <tr class="stock-row cursor-pointer" data-code="${item.code}" data-name="${item.name}">
-            <td>
-              ${item.name}
-              <small class="text-secondary">(${item.code})</small>
-            </td>
-            <td>${priceStr}</td>
-            <td class="${colorClass}">${changeStr}</td>
-            <td class="${colorClass}">${pctStr}</td>
-            <td>${volStr}</td>
-            <td>${timeStr}</td>
-          </tr>
-        `;
-      }).join("");
+        <tr class="stock-row cursor-pointer" data-code="${item.code}">
+          <td>${item.name}<small class="text-secondary">(${item.code})</small></td>
+          <td>${p}</td>
+          <td class="${cls}">${chs}</td>
+          <td class="${cls}">${pct}</td>
+          <td>${vol}</td>
+          <td>${t}</td>
+        </tr>`;
+      }).join('');
 
-      const rowEls = document.querySelectorAll(".stock-row");
-      rowEls.forEach(row => {
-        row.addEventListener("click", () => {
-          const code = row.dataset.code;
-          const name = row.dataset.name;
-          loadDetail(code, name);
-        });
-      });
-    });
-  });
+      document.querySelectorAll('.stock-row').forEach(r =>
+        r.addEventListener('click', () => loadDetail(r.dataset.code, r.querySelector('td').textContent))
+      );
+    } catch {
+      membersTbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">載入失敗</td></tr>`;
+    }
+  }
 
   async function loadDetail(code, name) {
-    priceCard.style.display = "block";
+    priceCard.style.display = 'block';
     priceHeader.textContent = `${name} (${code}) 即時資訊`;
     priceBody.innerHTML = `<div class="text-center text-light">載入中…</div>`;
-
     chartHeader.textContent = `${name} (${code}) 24 小時走勢 (5 分鐘間隔)`;
-
-    trendChart.data.labels = [];
-    trendChart.data.datasets[0].data = [];
-    trendChart.update();
+    trendChart.data.labels = []; trendChart.data.datasets[0].data = []; trendChart.update();
 
     try {
       const prResp = await fetch(`/stocks/api/stock_price?symbol=${encodeURIComponent(code)}`);
-      if (prResp.ok) {
-        const prData = await prResp.json();
-        if (!prData.error) {
-          const p = prData.price !== null && prData.price !== undefined ? prData.price.toLocaleString() : "—";
-          const c = prData.change !== null && prData.change !== undefined ? prData.change : null;
-          const pct = prData.pct !== null && prData.pct !== undefined ? prData.pct : null;
-          const v = prData.volume !== null && prData.volume !== undefined ? prData.volume.toLocaleString() : "—";
-          const t = prData.time || "—";
-          let cls = "";
-          let chStr = "—";
-          let pctStr = "—";
-          if (c !== null) {
-            cls = c >= 0 ? "text-success" : "text-danger";
-            chStr = c >= 0 ? `▲ ${c.toLocaleString()}` : `▼ ${Math.abs(c).toLocaleString()}`;
-            pctStr = c >= 0 ? `▲ ${pct.toFixed(2)}%` : `▼ ${Math.abs(pct).toFixed(2)}%`;
-          }
-          priceBody.innerHTML = `
-            <div class="d-flex flex-column gap-1">
-              <div><strong>現價：</strong>${p}</div>
-              <div class="${cls}"><strong>漲跌：</strong>${chStr} (${pctStr})</div>
-              <div><strong>成交量：</strong>${v}</div>
-              <div><strong>時間：</strong>${t}</div>
-            </div>
-          `;
-        } else {
-          priceBody.innerHTML = `<div class="text-center text-danger">即時資料錯誤</div>`;
-        }
+      const prData = await prResp.json();
+      if (prResp.ok && !prData.error) {
+        const p      = prData.price?.toLocaleString()   ?? '—';
+        const c      = prData.change;
+        const pct    = prData.pct;
+        const v      = prData.volume?.toLocaleString() ?? '—';
+        const t      = prData.time || '—';
+        const cls    = c!=null?(c>=0?'text-success':'text-danger'):'';
+        const chs    = c!=null?(c>=0?`▲ ${c}`:`▼ ${Math.abs(c)}`):'—';
+        const pctStr = c!=null?(c>=0?`▲ ${pct.toFixed(2)}%`:`▼ ${Math.abs(pct).toFixed(2)}%`):'—';
+        priceBody.innerHTML = `
+          <div class="d-flex flex-column gap-1">
+            <div><strong>現價：</strong>${p}</div>
+            <div class="${cls}"><strong>漲跌：</strong>${chs} (${pctStr})</div>
+            <div><strong>成交量：</strong>${v}</div>
+            <div><strong>時間：</strong>${t}</div>
+          </div>`;
       } else {
-        throw new Error(`status ${prResp.status}`);
+        priceBody.innerHTML = `<div class="text-center text-danger">即時資料錯誤</div>`;
       }
-    } catch (err) {
-      console.error("[loadDetail][stock_price] 錯誤", err);
+    } catch {
       priceBody.innerHTML = `<div class="text-center text-danger">即時價格載入失敗</div>`;
     }
 
     try {
-      const histResp = await fetch(
-        `/stocks/api/stock_history?symbol=${encodeURIComponent(code)}&interval=5min`
-      );
-      if (!histResp.ok) {
-        if (histResp.status === 429) throw new Error("Too Many Requests");
-        throw new Error(`status ${histResp.status}`);
-      }
+      const histResp = await fetch(`/stocks/api/stock_history?symbol=${encodeURIComponent(code)}&interval=5min`);
       const histData = await histResp.json();
-      if (histData.error) {
-        chartHeader.textContent = `${name} (${code}) 24 小時走勢 (${histData.error})`;
-      } else {
-        const times  = histData.timestamps || [];
-        const prices = histData.prices || [];
-
-        trendChart.data.labels = times;
+      if (!histData.error) {
+        const { timestamps: times, prices } = histData;
+        trendChart.data.labels   = times;
         trendChart.data.datasets[0].data = prices;
         if (prices.length) {
-          const mx = Math.max(...prices);
-          const mn = Math.min(...prices);
+          const mx = Math.max(...prices), mn = Math.min(...prices);
           trendChart.options.scales.y.min = mn * 0.995;
           trendChart.options.scales.y.max = mx * 1.005;
         }
         trendChart.update();
+      } else {
+        chartHeader.textContent = `${name} (${code}) 24 小時走勢 (${histData.error})`;
       }
-    } catch (err) {
-      console.error("[loadDetail][stock_history] 錯誤", err);
+    } catch {
       chartHeader.textContent = `${name} (${code}) 24 小時走勢 (載入失敗)`;
     }
   }
+
+  searchInput.addEventListener('keyup', async e => {
+    if (e.key !== 'Enter') return;
+    const q = searchInput.value.trim().toLowerCase();
+    if (!q) {
+      return resetView();
+    }
+    let targetCat, targetCode;
+    for (const market of ['上市','上櫃']) {
+      for (const itm of (categoriesData[market]||[])) {
+        const cat = itm.key;
+        try {
+          const resp = await fetch(`/stocks/api/stock_category_members?category=${encodeURIComponent(cat)}`);
+          if (!resp.ok) continue;
+          const members = await resp.json();
+          const m = members.find(x =>
+            x.code.toLowerCase().includes(q) ||
+            x.name.toLowerCase().includes(q)
+          );
+          if (m) { targetCat = cat; targetCode = m.code; break; }
+        } catch {}
+      }
+      if (targetCat) break;
+    }
+    if (!targetCat) {
+      return alert('找不到該股票');
+    }
+    const li = document.querySelector(`.category-item[data-category="${targetCat}"]`);
+    if (li) {
+      li.click();
+      setTimeout(() => {
+        document.querySelectorAll('.stock-row.highlight').forEach(r => r.classList.remove('highlight'));
+        const row = document.querySelector(`.stock-row[data-code="${targetCode}"]`);
+        if (row) {
+          row.classList.add('highlight');
+          row.scrollIntoView({ behavior:'smooth', block:'center' });
+        }
+      }, 600);
+    }
+  });
+
+  function resetView() {
+    document.querySelectorAll('.category-item.active').forEach(x => x.classList.remove('active'));
+    membersHeader.textContent = '請先點選左側「類股」';
+    membersTbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted">尚未選擇類股</td></tr>`;
+    priceCard.style.display = 'none';
+  }
+
+  loadCategories();
 });
 </script>
 {% endblock %}
+

@@ -43,6 +43,16 @@
   .team-role {
     font-size: .95rem;
     color: #ccc;
+    margin-bottom: 1rem;
+  }
+  .social-links a {
+    color: #fff;
+    margin: 0 .5rem;
+    font-size: 1.25rem;
+    transition: color .2s;
+  }
+  .social-links a:hover {
+    color: #26a69a;
   }
 </style>
 
@@ -50,59 +60,49 @@
   <div class="container">
     <h1 class="animate__animated animate__fadeInDown">關於 FinWeb</h1>
     <p class="animate__animated animate__fadeInUp animate__delay-1s mission">
-      我們致力於打造最專業、好用、免費的即時金融資訊平台，
-      結合大數據、AI 與可視化工具，助您做出更聰明的投資決策。
+      我們致力於打造最專業、好用的即時金融資訊平台，結合大數據、AI 與可視化工具，助您做出更聰明的投資決策。
     </p>
   </div>
 </section>
 
 <section class="py-5" style="background-color:#16262b;">
   <div class="container">
-    <h2 class="section-title text-center text-white mb-5">我們的團隊</h2>
-    <div class="row g-4">
-      <!-- 團隊成員 Card 範例 -->
+    <h2 class="section-title text-center text-white mb-5">我們的開發團隊</h2>
+    <div class="row g-4 justify-content-center">
+
+      <!-- Niansia -->
       <div class="col-md-4">
         <div class="team-card h-100">
-          <img src="{{ url_for('static', filename='img/team/alice.jpg') }}"
-               alt="Alice" class="team-photo mx-auto d-block">
-          <div class="team-name">Alice Chen</div>
-          <div class="team-role">創辦人 & 首席分析師</div>
-          <p class="mt-2 text-white-50">
-            金融業十年經驗，擅長量化研究與大數據分析。
-          </p>
+          <img src="{{ url_for('static', filename='img/team/niansia.jpg') }}" alt="niansia" class="team-photo mx-auto d-block">
+          <div class="team-name">niansia</div>
+          <div class="team-role">機器學習大師 & 開發者</div>
+          <p class="text-white-50 mb-3">大佬7122</p>
+          <div class="social-links">
+            <a href="https://github.com/niansia" target="_blank"><i class="fab fa-github"></i></a>
+            <a href="mailto:niansia@example.com"><i class="fas fa-envelope"></i></a>
+          </div>
         </div>
       </div>
 
+      <!-- 400Ping -->
       <div class="col-md-4">
         <div class="team-card h-100">
-          <img src="{{ url_for('static', filename='img/team/bob.jpg') }}"
-               alt="Bob" class="team-photo mx-auto d-block">
-          <div class="team-name">Bob Lin</div>
-          <div class="team-role">技術長</div>
-          <p class="mt-2 text-white-50">
-            全棧工程師，負責平台後端與 AI 服務整合。
-          </p>
+          <img src="{{ url_for('static', filename='img/team/400Ping.jpg') }}" alt="400Ping" class="team-photo mx-auto d-block">
+          <div class="team-name">400Ping</div>
+          <div class="team-role">專業打雜仔</div>
+          <p class="text-white-50 mb-3">大型開源專案貢獻者(打雜仔)</p>
+          <div class="social-links">
+            <a href="https://github.com/400Ping" target="_blank"><i class="fab fa-github"></i></a>
+            <a href="mailto:fourhundredping@gmail.com"><i class="fas fa-envelope"></i></a>
+          </div>
         </div>
       </div>
 
-      <div class="col-md-4">
-        <div class="team-card h-100">
-          <img src="{{ url_for('static', filename='img/team/cindy.jpg') }}"
-               alt="Cindy" class="team-photo mx-auto d-block">
-          <div class="team-name">Cindy Wu</div>
-          <div class="team-role">產品經理</div>
-          <p class="mt-2 text-white-50">
-            專注使用者體驗設計，打造易用又直覺的介面。
-          </p>
-        </div>
-      </div>
     </div>
 
     <div class="text-center mt-5">
-      <p class="text-white-50">
-        想加入我們？請寄履歷至 career@finweb.example
-      </p>
-      <a href="mailto:career@finweb.example" class="btn btn-glass btn-lg">加入團隊</a>
+      <p class="text-white-50">想加入我們？請寄履歷至 <a href="mailto:finwebfinance2025@gmail.com" class="text-white-50">finwebfinance2025@gmail.com</a></p>
+      <a href="mailto:finwebfinance2025@gmail.com" class="btn btn-glass btn-lg">加入團隊</a>
     </div>
   </div>
 </section>

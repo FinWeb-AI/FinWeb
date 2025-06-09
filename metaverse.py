@@ -24,7 +24,7 @@ def api_metaverse_feed():
     feed = feedparser.parse(url)
 
     items = []
-    for e in feed.entries[:20]:
+    for e in feed.entries:
         img = ""
         if "media_content" in e:
             img = e.media_content[0].get("url", "")

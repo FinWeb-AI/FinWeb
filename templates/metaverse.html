@@ -6,18 +6,14 @@
   <div class="d-flex mb-3">
     <input id="mv-input" type="text" class="form-control me-2" placeholder="輸入標的：如 2330 或 台積電">
     <button class="btn btn-success me-2" onclick="searchNews()">搜尋</button>
-
     <button id="mode-btn" class="btn btn-info me-2">自動模式</button>
-
     <button id="voice-btn" class="btn btn-outline-light" title="語音搜尋">
       <i class="fas fa-microphone"></i>
     </button>
   </div>
 </div>
-
 <div id="mv-container"></div>
 <div id="news-sidebar"></div>
-
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index:10000">
   <div id="toast-loading" class="toast align-items-center text-white bg-dark border-0" role="alert"
        aria-live="assertive" aria-atomic="true">
@@ -31,33 +27,14 @@
 
 {% block scripts %}
 <style>
-  /* 主視覺容器 */
-  #mv-container{
-    position:fixed;inset:70px 0 0 0;
-    background:#151520;overflow:hidden;z-index:0;
-  }
-  /* 將 WebGL 與 CSS3D renderer 提升一層，避免被覆蓋 */
-  #mv-container canvas,
-  #mv-container > div{
-    position:absolute;top:0;left:0;z-index:1;
-  }
-
-  /* 側邊欄 */
-  #news-sidebar{
-    position:fixed;top:90px;right:0;
-    width:260px;height:calc(100% - 100px);
-    background:rgba(0,0,0,.6);color:#fff;
-    overflow-y:auto;padding:10px;z-index:10001;font-size:14px;
-  }
+  #mv-container{position:fixed;inset:70px 0 0 0;background:#151520;overflow:hidden;z-index:0;}
+  #mv-container canvas,#mv-container>div{position:absolute;top:0;left:0;z-index:1;}
+  #news-sidebar{position:fixed;top:90px;right:0;width:260px;height:calc(100% - 100px);
+    background:rgba(0,0,0,.6);color:#fff;overflow-y:auto;padding:10px;z-index:10001;font-size:14px;}
   #news-sidebar .item{margin-bottom:6px;padding:6px 8px;border-radius:4px;cursor:pointer;}
   #news-sidebar .item:hover{background:rgba(255,255,255,.1);}
-
-  /* 新聞卡 */
-  .news-card{
-    width:280px;display:flex;flex-direction:column;
-    background:#000;color:#fff;border-radius:8px;
-    box-shadow:0 4px 14px rgba(0,0,0,.6);overflow:hidden;cursor:pointer;
-  }
+  .news-card{width:280px;display:flex;flex-direction:column;background:#000;color:#fff;
+    border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.6);overflow:hidden;cursor:pointer;}
   .news-card img.news-img{width:100%;height:140px;object-fit:cover;}
   .news-card .overlay{backdrop-filter:blur(4px);background:rgba(0,0,0,.55);padding:10px;border-radius:0 0 8px 8px;}
   .news-card .overlay h6{font-size:16px;margin:0 0 .3rem;}
@@ -66,10 +43,10 @@
 
 <script type="module">
 import * as THREE from "three";
-import { CSS3DRenderer, CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { DragControls } from "three/examples/jsm/controls/DragControls.js";
-import TWEEN from "https://unpkg.com/@tweenjs/tween.js@18.6.4/dist/tween.esm.js";
+import { CSS3DRenderer,CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
+import { OrbitControls }               from "three/examples/jsm/controls/OrbitControls.js";
+import { DragControls }                from "three/examples/jsm/controls/DragControls.js";
+import TWEEN                           from "https://unpkg.com/@tweenjs/tween.js@18.6.4/dist/tween.esm.js";
 
 const input   = document.getElementById("mv-input");
 const modeBtn = document.getElementById("mode-btn");
@@ -82,62 +59,25 @@ const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, W/H, 1, 12000);
 camera.position.set(0,500,3000);
 
-const gl  = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-gl.setSize(W, H);
-wrap.appendChild(gl.domElement);
-
-gl.domElement.style.pointerEvents = "none";
-gl.domElement.style.zIndex        = "0";
+const gl = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+gl.setSize(W,H); wrap.appendChild(gl.domElement);
+gl.domElement.style.pointerEvents="none"; gl.domElement.style.zIndex="0";
 
 const css = new CSS3DRenderer();
-css.setSize(W, H);
-css.domElement.style.position = "absolute";
-css.domElement.style.inset    = "0";
+css.setSize(W,H); css.domElement.style.position="absolute"; css.domElement.style.inset="0";
 wrap.appendChild(css.domElement);
-
-css.domElement.style.pointerEvents = "auto";
-css.domElement.style.zIndex        = "1";
+css.domElement.style.pointerEvents="auto"; css.domElement.style.zIndex="1";
 
 const controls = new OrbitControls(camera, css.domElement);
-controls.enableDamping = true; controls.dampingFactor = .1;
-controls.enablePan = false; controls.minDistance = 1; controls.maxDistance = Infinity;
+controls.enableDamping=true; controls.dampingFactor=.1;
+controls.enablePan=false;    controls.minDistance=1; controls.maxDistance=Infinity;
 
 let isAuto = true;
-function updateMode(){
-  if(isAuto){
-    modeBtn.innerText = "自動模式";
-    controls.enabled  = false;
-    controls.enableZoom = false;
-    cameraFly();
-  }else{
-    modeBtn.innerText = "手動模式";
-    controls.enabled  = true;
-    controls.enableZoom = true;
-  }
-}
-modeBtn.addEventListener("click",()=>{
-  isAuto = !isAuto;
-  if(!isAuto) TWEEN.removeAll();
-  updateMode();
-});
+let dragCtrl = null;
+const panels = [];
 
-controls.addEventListener("start", ()=>{ isAuto=false; updateMode(); });
-
-window.addEventListener("resize",()=>{
-  W = wrap.clientWidth; H = wrap.clientHeight;
-  camera.aspect = W/H; camera.updateProjectionMatrix();
-  gl.setSize(W,H); css.setSize(W,H);
-});
-
-(()=>{
-  const g = new THREE.BufferGeometry(), cnt = 5000;
-  const pos = new Float32Array(cnt*3);
-  for(let i=0;i<pos.length;i++) pos[i]=(Math.random()-.5)*10000;
-  g.setAttribute("position", new THREE.BufferAttribute(pos,3));
-  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color:0xffffff, size:.9 })));
-})();
-
-const NODE=200, nodes=[]; // 隨機生成節點
+const NODE = 300;
+const nodes = [];
 for(let i=0;i<NODE;i++){
   nodes.push(new THREE.Vector3(
     (Math.random()-.5)*8000,
@@ -145,64 +85,95 @@ for(let i=0;i<NODE;i++){
     (Math.random()-.5)*8000
   ));
 }
-const links=[], MAXL=NODE*5, MAXD=3000; // 隨機生成連線
-while(links.length/6<MAXL){
-  const a=nodes[Math.floor(Math.random()*NODE)];
-  const b=nodes[Math.floor(Math.random()*NODE)];
-  if(a!==b && a.distanceTo(b)<MAXD){
-    links.push(a.x,a.y,a.z,b.x,b.y,b.z);
+const linkIdx = [], deg=new Array(NODE).fill(0);
+while(linkIdx.length/2 < NODE*10){
+  const a=Math.floor(Math.random()*NODE), b=Math.floor(Math.random()*NODE);
+  if(a!==b && nodes[a].distanceTo(nodes[b])<3000){
+    linkIdx.push(a,b);
+    deg[a]++; deg[b]++;
   }
 }
-const lg=new THREE.BufferGeometry();
-lg.setAttribute("position",new THREE.Float32BufferAttribute(links,3));
-scene.add(new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0xffffff,opacity:.15,transparent:true})));
-scene.add(new THREE.Points(
-  new THREE.BufferGeometry().setFromPoints(nodes),
-  new THREE.PointsMaterial({color:0xffffff,size:4})
-));
+const links=[];
+for(let i=0;i<linkIdx.length;i+=2){
+  const a=nodes[linkIdx[i]], b=nodes[linkIdx[i+1]];
+  links.push(a.x,a.y,a.z, b.x,b.y,b.z);
+}
 
-const panels=[]; let dragCtrl=null;
+const baseGroup = new THREE.Group();
+(() => {
+  const geo = new THREE.BufferGeometry(), cnt=10000;
+  const pos = new Float32Array(cnt*3);
+  for(let i=0;i<pos.length;i++) pos[i]=(Math.random()-.5)*10000;
+  geo.setAttribute("position", new THREE.BufferAttribute(pos,3));
+  baseGroup.add(new THREE.Points(geo,new THREE.PointsMaterial({color:0xffffff,size:.9})));
+})();
+{
+  const lg = new THREE.BufferGeometry();
+  lg.setAttribute("position", new THREE.Float32BufferAttribute(links,3));
+  baseGroup.add(new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0xffffff,opacity:.15,transparent:true})));
+  baseGroup.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(nodes),new THREE.PointsMaterial({color:0xffffff,size:4})));
+}
+const tileSize = 9000;
+const tileGroups=[];
+[-1,0,1].forEach(x=>[-1,0,1].forEach(z=>{
+  const g = (x===0&&z===0)? baseGroup : baseGroup.clone();
+  scene.add(g);
+  tileGroups.push({g,offset:new THREE.Vector3(x*tileSize,0,z*tileSize)});
+}));
+
+const sorted = [...Array(NODE).keys()].sort((a,b)=>deg[b]-deg[a]);
+const topNodes = sorted.slice(0, Math.min(100, NODE));
+
+function updateMode(){
+  if(isAuto){
+    modeBtn.innerText="自動模式";
+    controls.enabled=false; controls.enableZoom=false;
+    cameraFly();
+  }else{
+    modeBtn.innerText="手動模式";
+    controls.enabled=true; controls.enableZoom=true;
+  }
+}
+modeBtn.addEventListener("click",()=>{
+  isAuto=!isAuto; if(!isAuto) TWEEN.removeAll(); updateMode();
+});
+controls.addEventListener("start",()=>{
+  isAuto=false; updateMode();
+});
+window.addEventListener("resize",()=>{
+  W=wrap.clientWidth;H=wrap.clientHeight;
+  camera.aspect=W/H;camera.updateProjectionMatrix();
+  gl.setSize(W,H);css.setSize(W,H);
+});
+
 function clearPanels(){
   panels.forEach(o=>scene.remove(o));
   panels.length=0; sidebar.innerHTML="";
   if(dragCtrl){ dragCtrl.dispose(); dragCtrl=null; }
 }
-function makeCard(d, i){
-  const link = document.createElement("a");
-  link.href   = d.link || "#";
-  link.target = "_blank";
-  link.rel    = "noopener noreferrer";
-  link.className = "news-card";
 
-  const inner = document.createElement("div");
-  inner.className = "card-inner";
+function makeCard(d,i){
+  const a=document.createElement("a");
+  a.href=d.link||"#";a.target="_blank";a.rel="noopener noreferrer";
+  a.className="news-card";
+  a.innerHTML=(d.img?`<img src="${d.img}" class="news-img">`:"")
+    +`<div class="overlay"><h6>${d.title}</h6><small>${d.published}</small></div>`;
+  a.addEventListener("pointerdown",e=>e.stopPropagation());
+  const obj=new CSS3DObject(a);
 
-  inner.innerHTML =
-    (d.img ? `<img src="${d.img}" class="news-img">` : "") +
-    `<div class="overlay">
-        <h6>${d.title}</h6>
-        <small>${d.published}</small>
-     </div>`;
+  const ni = topNodes[i % topNodes.length];
+  obj.position.copy(nodes[ni].clone().add(new THREE.Vector3(
+    (Math.random()-.5)*200,
+    (Math.random()-.5)*200,
+    (Math.random()-.5)*200
+  )));
 
-  link.appendChild(inner);
-
-  link.addEventListener("pointerdown", e => e.stopPropagation());
-
-  const obj = new CSS3DObject(link);
-  obj.position.set(0, 0, 0);
   scene.add(obj);
   panels.push(obj);
 
-  const end = nodes[Math.floor(Math.random() * NODE)];
-  new TWEEN.Tween(obj.position)
-      .to({ x: end.x, y: end.y, z: end.z }, 1200 + i * 100)
-      .easing(TWEEN.Easing.Quadratic.Out)
-      .start();
-
-  const side = document.createElement("div");
-  side.className = "item";
-  side.innerText = d.title;
-  side.onclick   = () => flyTo(i);
+  const side=document.createElement("div");
+  side.className="item"; side.innerText=d.title;
+  side.onclick=()=>flyTo(panels.indexOf(obj));
   sidebar.appendChild(side);
 }
 
@@ -211,13 +182,15 @@ async function loadNews(sym){
   try{
     const res=await fetch(`/api/metaverse_feed?symbol=${encodeURIComponent(sym)}`);
     const data=await res.json();
-    if(data.error){alert(data.error);return;}
+    if(data.error){ alert(data.error);return; }
     data.forEach((d,i)=>makeCard(d,i));
     dragCtrl=new DragControls(panels,camera,css.domElement);
     dragCtrl.addEventListener("dragstart",()=>controls.enabled=false);
-    dragCtrl.addEventListener("dragend",  ()=>controls.enabled=true);
-  }catch(e){console.error(e);alert("API 錯誤");}
-  finally{toast.hide();}
+    dragCtrl.addEventListener("dragend",()=>controls.enabled=true);
+    if(isAuto){ TWEEN.removeAll(); cameraFly(); }
+  }catch(e){
+    console.error(e); alert("API 錯誤");
+  }finally{ toast.hide(); }
 }
 window.searchNews=()=>{
   const v=input.value.trim();
@@ -229,48 +202,42 @@ window.searchNews=()=>{
   if("SpeechRecognition"in window||"webkitSpeechRecognition"in window){
     const R=window.SpeechRecognition||window.webkitSpeechRecognition;
     const rec=new R(); rec.lang="zh-TW";
-    rec.onresult=e=>{
-      input.value=e.results[0][0].transcript; loadNews(input.value);
-    };
+    rec.onresult=e=>{ input.value=e.results[0][0].transcript; loadNews(input.value); };
     mic.onclick=()=>rec.start();
   }else mic.style.display="none";
 })();
 
 function cameraFly(){
-  if(!isAuto) return;
-  const tgt=nodes[Math.floor(Math.random()*NODE)];
-  const off=new THREE.Vector3(
-    (Math.random()-.5)*1200,
-    (Math.random()-.5)*600,
-    (Math.random()-.5)*1200
-  );
-  const np=tgt.clone().add(off);
-  new TWEEN.Tween(camera.position)
-    .to({x:np.x,y:np.y,z:np.z},8000)
+  if(!isAuto||panels.length===0)return;
+  const idx=Math.floor(Math.random()*panels.length),
+        tgt=panels[idx].position.clone(),
+        off=new THREE.Vector3((Math.random()-.5)*1200,(Math.random()-.5)*600,(Math.random()-.5)*1200),
+        np=tgt.clone().add(off);
+  new TWEEN.Tween(camera.position).to({x:np.x,y:np.y,z:np.z},8000)
     .easing(TWEEN.Easing.Sinusoidal.InOut).start();
-  new TWEEN.Tween(controls.target)
-    .to({x:tgt.x,y:tgt.y,z:tgt.z},8000)
-    .easing(TWEEN.Easing.Sinusoidal.InOut)
-    .onComplete(cameraFly).start();
+  new TWEEN.Tween(controls.target).to({x:tgt.x,y:tgt.y,z:tgt.z},8000)
+    .easing(TWEEN.Easing.Sinusoidal.InOut).onComplete(cameraFly).start();
 }
-cameraFly();
 
 function flyTo(idx){
   isAuto=false; updateMode();
-  const o=panels[idx]; if(!o) return;
-  const tp=o.position.clone();
-  const np=tp.clone().add(new THREE.Vector3(0,200,800));
-  new TWEEN.Tween(camera.position)
-    .to({x:np.x,y:np.y,z:np.z},2000)
+  const o=panels[idx]; if(!o)return;
+  const tp=o.position.clone(), np=tp.clone().add(new THREE.Vector3(0,200,800));
+  new TWEEN.Tween(camera.position).to({x:np.x,y:np.y,z:np.z},2000)
     .easing(TWEEN.Easing.Cubic.Out).start();
-  new TWEEN.Tween(controls.target)
-    .to({x:tp.x,y:tp.y,z:tp.z},2000)
+  new TWEEN.Tween(controls.target).to({x:tp.x,y:tp.y,z:tp.z},2000)
     .easing(TWEEN.Easing.Cubic.Out).start();
 }
 
 (function animate(t){
   requestAnimationFrame(animate);
-  scene.rotation.y+=0.0001;
+  tileGroups.forEach(({g,offset})=>{
+    g.position.set(
+      offset.x - camera.position.x,
+      offset.y - camera.position.y,
+      offset.z - camera.position.z
+    );
+  });
   controls.update(); TWEEN.update(t);
   gl.render(scene,camera); css.render(scene,camera);
 })();

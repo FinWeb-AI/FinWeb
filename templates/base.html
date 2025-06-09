@@ -62,87 +62,75 @@
 
       <div id="navMenu" class="collapse navbar-collapse">
         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <!-- 概覽 -->
           <li class="nav-item">
             <a class="nav-link {% if request.endpoint == 'market_overview' %}active{% endif %} text-light"
-               href="{{ url_for('market_overview') }}">
+              href="{{ url_for('market_overview') }}">
               <i class="fas fa-globe-americas me-1"></i>總覽
             </a>
           </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.endpoint in ['crypto','index'] %}active{% endif %} text-light"
-               href="{{ url_for('crypto') }}">
-              <i class="fab fa-bitcoin me-1"></i>即時行情
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'sentiment.sentiment' %}active{% endif %} text-light"
-               href="{{ url_for('sentiment.sentiment') }}">
-              <i class="fas fa-chart-pie me-1"></i>情緒雷達
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'cv_pattern.cv_pattern' %}active{% endif %} text-light"
-               href="{{ url_for('cv_pattern.cv_pattern') }}">
-              <i class="fas fa-image me-1"></i>圖像辨識
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'forecast.forecast' %}active{% endif %} text-light"
-               href="{{ url_for('forecast.forecast') }}">
-              <i class="fas fa-bolt me-1"></i>AI 預測
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.endpoint.startswith('backtest.') %}active{% endif %} text-light"
-               href="{{ url_for('backtest.backtest_home') }}">
-              <i class="fas fa-retweet me-1"></i>策略回測
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.endpoint.startswith('portfolio.') %}active{% endif %} text-light"
-               href="{{ url_for('portfolio.portfolio_home') }}">
-              <i class="fas fa-shield-alt me-1"></i>投組風險
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {% if request.endpoint == 'metaverse.metaverse' %}active{% endif %} text-light"
-               href="{{ url_for('metaverse.metaverse') }}">
-              <i class="fas fa-vr-cardboard me-1"></i>元宇宙新聞
-            </a>
-          </li>
+
+          <!-- 行情 -->
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle text-light" href="#" role="button" data-bs-toggle="dropdown">
-              <i class="fas fa-trending-up me-1"></i>走勢分析
+              <i class="fas fa-chart-bar me-1"></i>即時行情
             </a>
             <ul class="dropdown-menu bg-dark">
               <li>
-                <a class="dropdown-item {% if request.endpoint in ['crypto','index'] %}active{% endif %} bg-dark text-light"
-                   href="{{ url_for('crypto') }}">加密貨幣</a>
+                <a class="dropdown-item bg-dark text-light {% if request.endpoint == 'stocks.stocks_page' %}active{% endif %}"
+                  href="{{ url_for('stocks.stocks_page') }}">股票</a>
               </li>
               <li>
-                <a class="dropdown-item {% if request.endpoint == 'stocks.stocks_page' %}active{% endif %} bg-dark text-light"
-                   href="{{ url_for('stocks.stocks_page') }}">股票</a>
-              </li>
-              <li>
-                <a class="dropdown-item {% if request.endpoint.startswith('trend.') %}active{% endif %} bg-dark text-light"
-                   href="{{ url_for('trend.trend_home') }}">股票趨勢</a>
+                <a class="dropdown-item bg-dark text-light {% if request.endpoint in ['crypto','index'] %}active{% endif %}"
+                  href="{{ url_for('crypto') }}">加密貨幣</a>
               </li>
             </ul>
           </li>
+
+          <!-- 分析工具 -->
           <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle text-light" href="#" data-bs-toggle="dropdown">
-              <i class="fas fa-tools me-1"></i>金融工具
+            <a class="nav-link dropdown-toggle text-light" href="#" role="button" data-bs-toggle="dropdown">
+              <i class="fas fa-tools me-1"></i>分析工具
             </a>
             <ul class="dropdown-menu bg-dark">
               <li>
-                <a class="dropdown-item {% if request.endpoint == 'ai_analysis' %}active{% endif %} bg-dark text-light"
-                   href="{{ url_for('ai_analysis') }}">AI 分析</a>
+                <a class="dropdown-item bg-dark text-light {% if request.endpoint == 'sentiment.sentiment' %}active{% endif %}"
+                  href="{{ url_for('sentiment.sentiment') }}">情緒雷達</a>
               </li>
               <li>
-                <a class="dropdown-item {% if request.endpoint == 'market_overview' %}active{% endif %} bg-dark text-light"
-                   href="{{ url_for('market_overview') }}">市場概覽</a>
+                <a class="dropdown-item bg-dark text-light {% if request.endpoint == 'cv_pattern.cv_pattern' %}active{% endif %}"
+                  href="{{ url_for('cv_pattern.cv_pattern') }}">圖像辨識</a>
+              </li>
+              <li>
+                <a class="dropdown-item bg-dark text-light {% if request.endpoint == 'forecast.forecast' %}active{% endif %}"
+                  href="{{ url_for('forecast.forecast') }}">AI 預測</a>
               </li>
             </ul>
+          </li>
+
+          <!-- 策略工具 -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle text-light" href="#" role="button" data-bs-toggle="dropdown">
+              <i class="fas fa-retweet me-1"></i>策略工具
+            </a>
+            <ul class="dropdown-menu bg-dark">
+              <li>
+                <a class="dropdown-item bg-dark text-light {% if request.endpoint.startswith('backtest.') %}active{% endif %}"
+                  href="{{ url_for('backtest.backtest_home') }}">策略回測</a>
+              </li>
+              <li>
+                <a class="dropdown-item bg-dark text-light {% if request.endpoint.startswith('portfolio.') %}active{% endif %}"
+                  href="{{ url_for('portfolio.portfolio_home') }}">投組風險</a>
+              </li>
+            </ul>
+          </li>
+
+          <!-- 新聞／其他 -->
+          <li class="nav-item">
+            <a class="nav-link {% if request.endpoint == 'metaverse.metaverse' %}active{% endif %} text-light"
+              href="{{ url_for('metaverse.metaverse') }}">
+              <i class="fas fa-vr-cardboard me-1"></i>元宇宙新聞
+            </a>
           </li>
           <li class="nav-item">
             <a class="nav-link text-light" href="{{ url_for('sponsor') }}">
@@ -156,6 +144,7 @@
           </li>
         </ul>
 
+        <!-- 會員登入/登出 -->
         <ul class="navbar-nav mb-2 mb-lg-0">
           {% if current_user.is_authenticated %}
             <li class="nav-item dropdown">
@@ -164,7 +153,6 @@
               </a>
               <ul class="dropdown-menu dropdown-menu-end">
                 <li><a class="dropdown-item" href="{{ url_for('member.dashboard') }}">會員中心</a></li>
-                <li><a class="dropdown-item" href="{{ url_for('assistant') }}">AI 助理面板</a></li>
                 <li><a class="dropdown-item" href="{{ url_for('logout') }}">登出</a></li>
               </ul>
             </li>
@@ -176,6 +164,7 @@
       </div>
     </div>
   </nav>
+
   {% with msgs = get_flashed_messages(with_categories=true) %}
     {% if msgs %}
       <div class="position-fixed top-0 start-50 translate-middle-x mt-3" style="z-index:1080;max-width:480px;">
