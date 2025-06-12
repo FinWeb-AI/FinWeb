@@ -1,0 +1,13 @@
+{% extends "member/base_member.html" %}
+{% block member_content %}
+<div class="card-glass p-4">
+  <h2 class="mb-4">管理員後台</h2>
+  <p>這裡放後端管理員專屬操作的介面連結或表單：</p>
+  <ul>
+    <li><a href="{{ url_for('member.new_notification') }}">→ 發佈新通知（群發給所有使用者）</a></li>
+    <li><a href="{{ url_for('member.notifications') }}">→ 查看／刪除使用者通知</a></li>
+    <li><a href="{{ url_for('member.data_export') }}">→ 匯出所有使用者資料</a></li>
+    <li><a href="{{ url_for('member.admin_users') }}">→ 使用者管理（共 {{ total_users }} 人）</a></li>
+  </ul>
+</div>
+{% endblock %}

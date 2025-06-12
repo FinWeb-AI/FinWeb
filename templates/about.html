@@ -3,31 +3,75 @@
 
 {% block content %}
 <style>
-  .about-hero {
-    background: linear-gradient(135deg, #2c5364 0%, #0f2027 100%);
+  /* ===== 與首頁相同的玻璃卡 & 按鈕 ===== */
+  .glass-card {
+    position: relative;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-br);
+    border-radius: 28px;
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(0,0,0,.40);
+    transition: .35s;
+  }
+  .glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(140deg,
+      rgba(159,123,255,.45),
+      rgba(106,227,255,.45),
+      transparent 80%);
+    mask: linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0);
+    mask-composite: xor;
+    -webkit-mask-composite: xor;
+    padding: 1px;
+  }
+  .glass-card:hover {
+    transform: translateY(-6px);
+  }
+
+  .btn-hero {
+    border-radius: 999px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.25);
     color: #fff;
-    padding: 6rem 0;
+    font-weight: 600;
+    min-width: 140px;
+    transition: .25s;
+    backdrop-filter: blur(12px);
+  }
+  .btn-hero:hover {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    color: #000;
+    box-shadow: 0 0 12px rgba(106,227,255,.6);
+  }
+
+  /* Hero 區域 */
+  .hero {
+    padding: 5rem 0;
+    background: transparent;
+  }
+  .hero .glass-card {
+    padding: 4rem 2rem;
     text-align: center;
   }
-  .mission {
-    font-size: 1.25rem;
+  .hero h1 {
+    font-size: 3rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  .hero .mission {
+    font-size: 1.15rem;
     color: #ddd;
     margin-top: 1rem;
   }
-  .team-card {
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(8px);
-    border: none;
-    border-radius: 1rem;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-    padding: 2rem;
-    text-align: center;
-    color: #fff;
-    transition: transform .3s;
-  }
-  .team-card:hover {
-    transform: translateY(-6px);
-  }
+
+  /* 團隊卡片內部調整 */
   .team-photo {
     width: 120px;
     height: 120px;
@@ -37,13 +81,14 @@
     border: 3px solid rgba(255,255,255,0.3);
   }
   .team-name {
-    font-size: 1.2rem;
-    font-weight: 600;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff;
   }
   .team-role {
-    font-size: .95rem;
+    font-size: 1rem;
     color: #ccc;
-    margin-bottom: 1rem;
+    margin-bottom: .75rem;
   }
   .social-links a {
     color: #fff;
@@ -52,28 +97,31 @@
     transition: color .2s;
   }
   .social-links a:hover {
-    color: #26a69a;
+    color: var(--accent2);
   }
 </style>
 
-<section class="about-hero">
+<section class="hero">
   <div class="container">
-    <h1 class="animate__animated animate__fadeInDown">關於 FinWeb</h1>
-    <p class="animate__animated animate__fadeInUp animate__delay-1s mission">
-      我們致力於打造最專業、好用的即時金融資訊平台，結合大數據、AI 與可視化工具，助您做出更聰明的投資決策。
-    </p>
+    <div class="glass-card animate__animated animate__fadeInDown">
+      <h1>關於 FinWeb</h1>
+      <p class="mission animate__animated animate__fadeInUp animate__delay-1s">
+        我們致力於打造最專業、好用的即時金融資訊平台，
+        結合大數據、AI 與可視化工具，助您做出更聰明的投資決策。
+      </p>
+    </div>
   </div>
 </section>
 
-<section class="py-5" style="background-color:#16262b;">
+<section class="py-5">
   <div class="container">
-    <h2 class="section-title text-center text-white mb-5">我們的開發團隊</h2>
-    <div class="row g-4 justify-content-center">
-
-      <!-- Niansia -->
-      <div class="col-md-4">
-        <div class="team-card h-100">
-          <img src="{{ url_for('static', filename='img/team/niansia.jpg') }}" alt="niansia" class="team-photo mx-auto d-block">
+    <h2 class="text-center text-white mb-5 animate__animated animate__fadeInUp">我們的開發團隊</h2>
+    <div class="row row-cols-1 row-cols-md-2 g-4 justify-content-center">
+      <div class="col animate__animated animate__fadeInUp animate__delay-1s">
+        <div class="glass-card p-4 h-100 text-center">
+          <img src="{{ url_for('static', filename='img/team/niansia.jpg') }}"
+               alt="niansia"
+               class="team-photo mx-auto d-block">
           <div class="team-name">niansia</div>
           <div class="team-role">機器學習大師 & 開發者</div>
           <p class="text-white-50 mb-3">大佬7122</p>
@@ -83,27 +131,36 @@
           </div>
         </div>
       </div>
-
-      <!-- 400Ping -->
-      <div class="col-md-4">
-        <div class="team-card h-100">
-          <img src="{{ url_for('static', filename='img/team/400Ping.jpg') }}" alt="400Ping" class="team-photo mx-auto d-block">
+      <div class="col animate__animated animate__fadeInUp animate__delay-2s">
+        <div class="glass-card p-4 h-100 text-center">
+          <img src="{{ url_for('static', filename='img/team/400Ping.jpg') }}"
+               alt="400Ping"
+               class="team-photo mx-auto d-block">
           <div class="team-name">400Ping</div>
           <div class="team-role">專業打雜仔</div>
-          <p class="text-white-50 mb-3">大型開源專案貢獻者(打雜仔)</p>
+          <p class="text-white-50 mb-3">大型開源專案貢獻者 (打雜仔)</p>
           <div class="social-links">
             <a href="https://github.com/400Ping" target="_blank"><i class="fab fa-github"></i></a>
             <a href="mailto:fourhundredping@gmail.com"><i class="fas fa-envelope"></i></a>
           </div>
         </div>
       </div>
-
     </div>
 
     <div class="text-center mt-5">
-      <p class="text-white-50">想加入我們？請寄履歷至 <a href="mailto:finwebfinance2025@gmail.com" class="text-white-50">finwebfinance2025@gmail.com</a></p>
-      <a href="mailto:finwebfinance2025@gmail.com" class="btn btn-glass btn-lg">加入團隊</a>
+      <p class="text-white-50 mb-3">
+        想加入我們？請寄履歷至
+        <a href="mailto:finwebfinance2025@gmail.com" class="text-white-50">
+          finwebfinance2025@gmail.com
+        </a>
+      </p>
+      <a href="mailto:finwebfinance2025@gmail.com"
+         class="btn btn-hero animate__animated animate__fadeInUp animate__delay-3s">
+        加入團隊
+      </a>
     </div>
   </div>
 </section>
 {% endblock %}
+
+{% block scripts %}{{ super() }}{% endblock %}

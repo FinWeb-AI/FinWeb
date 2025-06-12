@@ -1,18 +1,95 @@
 {% extends "member/base_member.html" %}
+
 {% block member_content %}
-<h1 class="text-2xl font-bold mb-4">API 金鑰管理</h1>
-<form method="POST">
-  {{ form.hidden_tag() }}
-  <button type="submit" class="btn-primary">{{ form.submit_new_key.label.text }}</button>
-</form>
-<ul class="mt-4">
-  {% for key in keys %}
-    <li>
-      {{ key.key }}
-      <form method="POST" action="{{ url_for('member.delete_api_key', key_id=key.id) }}" style="display:inline">
-        <button type="submit" class="btn-secondary btn-sm">刪除</button>
-      </form>
-    </li>
-  {% endfor %}
-</ul>
+<div class="flex items-center justify-between">
+  <h1 class="text-3xl font-semibold mb-6">API 金鑰管理</h1>
+  <button id="btn-new-key" class="btn btn-primary">➕ 產生新 API Key</button>
+</div>
+
+<div class="flex gap-3 mb-4">
+  <input class="input input-sm w-60" placeholder="搜尋名稱 / 前 4 碼" disabled />
+  <select class="select select-sm w-40" disabled>
+    <option>全部權限</option>
+  </select>
+</div>
+
+<div class="overflow-x-auto rounded-lg shadow">
+  <table class="table table-zebra w-full text-sm">
+    <thead>
+      <tr class="bg-base-300/50 text-base-content/70">
+        <th>名稱</th><th>Key (前 4 碼)</th><th>權限</th>
+        <th>建立</th><th>到期</th><th class="text-center">狀態</th><th class="text-center">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for k in keys %}
+      <tr data-id="{{ k.id }}">
+        <td class="label-cell">{{ k.label }}</td>
+        <td>{{ k.key_prefix }}</td>
+        <td>{{ k.scopes }}</td>
+        <td>{{ k.created_at|ts2date }}</td>
+        <td>{{ k.expires_at|ts2date if k.expires_at else "-" }}</td>
+        <td class="text-center">
+          {% if k.revoked %}<span class="badge badge-error">已停用</span>
+          {% elif k.expires_at and k.expires_at < now %}<span class="badge badge-warning">到期</span>
+          {% else %}<span class="badge badge-success">有效</span>{% endif %}
+        </td>
+        <td class="text-center">
+          <button class="btn btn-sm btn-secondary btn-edit">✏️</button>
+          <button class="btn btn-sm btn-error btn-delete">🗑️</button>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.getElementById('btn-new-key').onclick = async ()=>{
+    const r = await fetch("/member/api-keys", { method:"POST", body: new FormData() });
+    const j = await r.json().catch(()=>({ msg: r.statusText }));
+    if (r.ok && j.ok) {
+      prompt("⚠️ 這是您的新 API Key，請妥善保存，關閉後無法再次查看：", j.key);
+      location.reload();
+    } else {
+      alert("建立失敗：" + (j.msg || r.statusText));
+    }
+  };
+
+  document.querySelectorAll('.btn-delete').forEach(btn=>{
+    btn.addEventListener('click', async e=>{
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.id;
+      if (!confirm("確認要刪除此 API Key？")) return;
+      const r = await fetch(`/member/api-keys/delete/${id}`, { method:"POST" });
+      const j = await r.json().catch(()=>({}));
+      if (r.ok && j.ok) {
+        tr.remove();
+      } else {
+        alert("刪除失敗");
+      }
+    });
+  });
+
+  document.querySelectorAll('.btn-edit').forEach(btn=>{
+    btn.addEventListener('click', async e=>{
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.id;
+      const oldLabel = tr.querySelector('.label-cell').textContent.trim();
+      const newLabel = prompt("輸入新的 Key 名稱：", oldLabel);
+      if (newLabel===null || newLabel.trim()==="") return;
+      const fd = new FormData();
+      fd.append("label", newLabel.trim());
+      const r = await fetch(`/member/api-keys/${id}/rename`, {
+        method:"POST", body: fd
+      });
+      const j = await r.json().catch(()=>({ msg:"格式錯誤" }));
+      if (r.ok && j.ok) {
+        tr.querySelector('.label-cell').textContent = newLabel.trim();
+      } else {
+        alert("更新失敗：" + (j.msg||r.statusText));
+      }
+    });
+  });
+</script>
 {% endblock %}

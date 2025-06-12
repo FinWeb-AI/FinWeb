@@ -1,0 +1,32 @@
+{% extends "member/base_member.html" %}
+{% block member_content %}
+<div class="container-fluid py-4">
+  <h1 class="text-2xl font-bold mb-4">發布新通知（群發）</h1>
+  <div class="card-glass p-4 mb-4">
+    <form method="POST">
+      {{ form.hidden_tag() }}
+
+      <div class="mb-3">
+        {{ form.title.label(class="form-label text-white") }}
+        {{ form.title(class="form-control", placeholder="通知標題", required=True) }}
+      </div>
+
+      <div class="mb-3">
+        {{ form.body.label(class="form-label text-white") }}
+        {{ form.body(class="form-control", rows="4", placeholder="通知內容", required=True) }}
+      </div>
+
+      <div class="mb-3">
+        {{ form.link.label(class="form-label text-white") }}
+        {{ form.link(class="form-control", placeholder="可選：通知連結 (https://...)") }}
+      </div>
+
+      <div class="text-end">
+        {{ form.submit(class="btn btn-primary") }}
+        <a href="{{ url_for('member.notifications') }}"
+           class="btn btn-outline-light ms-2">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

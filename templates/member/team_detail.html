@@ -1,16 +1,83 @@
 {% extends "member/base_member.html" %}
 {% block member_content %}
-<h1 class="text-2xl font-bold mb-4">團隊：{{ team.name }}</h1>
-<h2 class="font-semibold">成員</h2>
-<ul>
-  {% for m in members %}
-    <li>{{ m.user.email }} (加入時間 {{ m.joined | datetimeformat }})</li>
-  {% endfor %}
-</ul>
-<h2 class="font-semibold mt-4">邀請新成員</h2>
-<form method="POST">
-  {{ form.hidden_tag() }}
-  <div>{{ form.email.label }} {{ form.email() }}</div>
-  <button type="submit" class="btn-primary">{{ form.submit.label.text }}</button>
-</form>
+<style>
+  .glass-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 0.75rem;
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    color: #edf1f5;
+  }
+  /* 強制白字與 placeholder */
+  .form-control,
+  .input {
+    color: #ffffff !important;
+  }
+  .form-control::placeholder,
+  .input::placeholder {
+    color: rgba(255,255,255,0.6) !important;
+  }
+  /* 刪除按鈕套用紅底白字 */
+  .btn-error {
+    background-color: #f43f5e;
+    color: #ffffff;
+  }
+  .btn-error:hover {
+    background-color: #e11d48;
+  }
+</style>
+
+<div class="container-fluid py-4">
+  <h1 class="display-5 text-white mb-4">團隊：{{ team.name }}</h1>
+  <p class="text-white/60 mb-4">
+    <strong>擁有者：</strong>{{ team.owner.username }}
+    &nbsp;&nbsp;
+    <strong>建立於：</strong>{{ team.created|ts2date }}
+  </p>
+
+  <div class="card glass-card p-4 mb-4">
+    <h5 class="card-title mb-3 text-white">成員列表</h5>
+    {% if members %}
+      <ul class="list-group list-group-flush">
+        {% for m in members %}
+          <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+            <div>
+              <div class="text-white">{{ m.user.username }}</div>
+              <small class="text-white-50">加入於 {{ m.joined|ts2date }}</small>
+            </div>
+            {% if is_owner %}
+              <form method="POST"
+                    action="{{ url_for('member.remove_member', team_id=team.id, member_id=m.id) }}"
+                    onsubmit="return confirm('確定要移除此成員？此操作無法復原！');">
+                <button type="submit" class="btn btn-error btn-sm">移除</button>
+              </form>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-white-50 mb-0">目前尚無任何成員。</p>
+    {% endif %}
+  </div>
+
+  {% if is_owner %}
+    <div class="card glass-card p-4">
+      <h5 class="card-title mb-3 text-white">邀請新成員</h5>
+      <form method="POST" class="row g-2">
+        {{ form.hidden_tag() }}
+        <div class="col">
+          {{ form.email(class="form-control form-control-sm bg-transparent", placeholder="輸入使用者電子郵件") }}
+          {% if form.email.errors %}
+            <div class="text-danger small mt-1">{{ form.email.errors[0] }}</div>
+          {% endif %}
+        </div>
+        <div class="col-auto">
+          {{ form.submit(class="btn btn-primary btn-sm") }}
+        </div>
+      </form>
+    </div>
+  {% endif %}
+</div>
 {% endblock %}

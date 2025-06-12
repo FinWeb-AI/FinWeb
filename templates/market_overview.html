@@ -1,7 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}市場概覽 - FinWeb{% endblock %}
 
-{% block styles %}
+{% block head %}
+  {{ super() }}
   <!-- Bootstrap 5 CSS（若 base.html 已載入可略過這行） -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <style>
@@ -13,7 +14,28 @@
       color: #adb5bd !important;
     }
 
-    /* 卡片（深色主題） */
+    .navbar .dropdown-menu {
+      background-color: #0e111d !important;
+      border: 1px solid var(--glass-br) !important;
+      backdrop-filter: none !important;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.2) !important;
+      z-index: 1200 !important; /* 確保比內容還要上層 */
+    }
+
+    /* dropdown 項目文字色 & 內邊距 */
+    .navbar .dropdown-item {
+      color: var(--text-light) !important;
+      padding: .5rem 1rem !important;
+      transition: background .2s, color .2s;
+    }
+
+    /* 滑鼠懸停 / 選取時的紫色效果 */
+    .navbar .dropdown-item:hover,
+    .navbar .dropdown-item:focus {
+      background-color: rgba(139, 92, 246, 0.15) !important;
+      color: #8b5cf6 !important;
+    }
+
     .card-dark {
       background-color: #242632;
       border: none;
@@ -37,7 +59,6 @@
       color: #adb5bd;
     }
 
-    /* 漲＝綠、跌＝紅、持平＝灰 */
     .value-up {
       color: #28a745 !important;
     }
@@ -79,20 +100,36 @@
       box-shadow: 0 0 0 0.1rem rgba(13,110,253,0.25);
       outline: none;
     }
-    #resetZoomBtn,
+
+    /* 分開設定重置鈕與時鐘，讓重置鈕較小 */
     #clockDisplay {
-      background-color: #3a3d4e;
-      color: #edf1f5;
-      border: 1px solid #3a3d4e;
+      background-color: #2a2d37;
+      color:      #00d8ff;
+      border:     2px solid #00d8ff;
+      border-radius: 0.5rem;
+      font-size: 1.25rem;       /* 小幅調整字型 */
+      padding: 0.5rem 1rem;     /* 小幅調整內距 */
+      width: auto;              /* 取消固定最小寬度 */
+      box-shadow: 0 2px 8px rgba(0, 216, 255, 0.3);
+      cursor: default;
+    }
+    #resetZoomBtn {
+      background-color: #2a2d37;
+      color:      #00d8ff;
+      border:     2px solid #00d8ff;
+      border-radius: 0.5rem;
+      font-size: 1rem;            /* 縮小字型 */
+      font-weight: bold;
+      padding: 0.5rem 1rem;       /* 縮小內距 */
+      min-width: 120px;           /* 縮小寬度 */
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0, 216, 255, 0.3);
     }
     #resetZoomBtn:hover,
     #clockDisplay:hover {
-      background-color: #484b59;
-      border-color: #484b59;
-      color: #ffffff;
-    }
-    #clockDisplay {
-      cursor: default;
+      background-color: #3a3f4e;
+      border-color:     #00c0dd;
+      color:            #e6f7ff;
     }
 
     /* 折線圖容器 */
@@ -158,14 +195,32 @@
     ::-webkit-scrollbar-track {
       background-color: #18191f;
     }
+    
+    #summaryTabs .nav-link {
+      color: rgba(255, 255, 255, 0.7) !important;  /* 你想要的淺白色 */
+      font-weight: 600;
+    }
+    /* nav tabs 被選中時文字 & 底線 */
+    #summaryTabs .nav-link.active {
+      color: #00d8ff !important;                   /* 主題亮藍色 */
+      border-color: #00d8ff !important;
+    }
+    /* 如果你還想同步左側「顯示設定」的 Accordion 標題 */
+    #controlsAccordion .accordion-button {
+      color: rgba(255, 255, 255, 0.7) !important;
+    }
+    #controlsAccordion .accordion-button:not(.collapsed) {
+      color: #00d8ff !important;
+      background-color: rgba(14,17,29,0.85) !important;
+    }
   </style>
 {% endblock %}
 
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-fluid pt-2 pb-4">
 
-  <div class="row mb-4">
+  <div class="row align-items-center mb-4">
 
     <div class="col-12 col-md-3 mb-2 mb-md-0">
       <button id="clockDisplay" class="btn btn-sm w-100">--:--:--</button>
@@ -724,7 +779,6 @@
 
 
 {% block scripts %}
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 

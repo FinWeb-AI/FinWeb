@@ -1,0 +1,53 @@
+<nav class="nav flex-column">
+  <a class="nav-link {% if request.endpoint=='member.dashboard' %}active{% endif %}"
+     href="{{ url_for('member.dashboard') }}">
+    <i class="fas fa-tachometer-alt me-2"></i> 儀表板
+  </a>
+  <a class="nav-link {% if request.endpoint=='member.profile' %}active{% endif %}"
+     href="{{ url_for('member.profile') }}">
+    <i class="fas fa-user me-2"></i> 個人檔案
+  </a>
+  <a class="nav-link {% if request.endpoint=='member.security' %}active{% endif %}"
+     href="{{ url_for('member.security') }}">
+    <i class="fas fa-shield-alt me-2"></i> 安全中心
+  </a>
+  <a class="nav-link {% if request.endpoint=='member.subscription' %}active{% endif %}"
+     href="{{ url_for('member.subscription') }}">
+    <i class="fas fa-file-invoice-dollar me-2"></i> 帳單與訂閱
+  </a>
+  <a class="nav-link {% if request.endpoint=='member.api_keys' %}active{% endif %}"
+     href="{{ url_for('member.api_keys') }}">
+    <i class="fas fa-key me-2"></i> API 金鑰
+  </a>
+  <a class="nav-link {% if request.endpoint=='member.teams' %}active{% endif %}"
+     href="{{ url_for('member.teams') }}">
+    <i class="fas fa-users me-2"></i> 團隊管理
+  </a>
+  <a class="nav-link {% if request.endpoint=='member.audit_logs' %}active{% endif %}"
+     href="{{ url_for('member.audit_logs') }}">
+    <i class="fas fa-book me-2"></i> 稽核日誌
+  </a>
+  <a class="nav-link {% if request.endpoint=='member.notifications' %}active{% endif %}"
+     href="{{ url_for('member.notifications') }}">
+    <i class="fas fa-bell me-2"></i> 通知
+  </a>
+  <a class="nav-link {% if request.endpoint=='member.data_export' %}active{% endif %}"
+     href="{{ url_for('member.data_export') }}">
+    <i class="fas fa-download me-2"></i> 資料匯出
+  </a>
+
+  {# 只有管理員才看得到的連結 #}
+  {% if current_user.is_admin %}
+    <hr class="my-3" style="border-color:rgba(255,255,255,0.1)">
+    <a class="nav-link {% if request.endpoint=='member.admin_panel' %}active{% endif %}"
+       href="{{ url_for('member.admin_panel') }}">
+      <i class="fas fa-cogs me-2"></i> 管理員後台
+    </a>
+  {% endif %}
+</nav>
+
+<div class="mt-auto">
+  <a class="nav-link" href="{{ url_for('logout') }}">
+    <i class="fas fa-sign-out-alt me-2"></i> 登出
+  </a>
+</div>

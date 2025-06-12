@@ -1,51 +1,171 @@
 {% extends "member/base_member.html" %}
-
 {% block title %}個人檔案 – FinWeb{% endblock %}
 
-{% block member_content %}
-  <div class="d-flex justify-content-center">
-    <div class="w-100" style="max-width: 500px;">
-      <h2 class="text-white mb-4">編輯個人檔案</h2>
-      <form method="POST" enctype="multipart/form-data"
-            class="card card-dark p-4 shadow">
-        {{ form.hidden_tag() }}
-
-        <div class="mb-4 text-center">
-          <img id="avatarPreview"
-               src="{{ current_user.avatar_url or url_for('static', filename='img/default-avatar.png') }}"
-               class="rounded-circle mb-2"
-               width="100" height="100" />
-          <div>
-            {{ form.avatar(class_="form-control form-control-sm d-inline-block w-auto") }}
-          </div>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label text-white">使用者名稱</label>
-          {{ form.username(class_="form-control bg-dark text-light") }}
-        </div>
-        <div class="mb-3">
-          <label class="form-label text-white">電子郵件</label>
-          {{ form.email(class_="form-control bg-dark text-light") }}
-        </div>
-
-        <button type="submit" class="btn btn-primary w-100">儲存變更</button>
-      </form>
-    </div>
-  </div>
+{% block head %}
+  {{ super() }}
+  <style>
+    :root{
+      --accent1:#9F7BFF;
+      --accent2:#6AE3FF;
+      --accent3:#FFFFFF;
+      --glass-grad:radial-gradient(100% 160% at 0% 0%,
+                     rgba(255,255,255,0.18) 0%,
+                     rgba(255,255,255,0.04) 60%,
+                     rgba(255,255,255,0) 100%);
+    }
+    .nav-profile .nav-link{
+      color:var(--text-secondary);
+      padding:.5rem 1.25rem;
+      border:1px solid transparent;
+      border-radius:.75rem .75rem 0 0;
+      font-weight:600;
+    }
+    .nav-profile .nav-link.active,
+    .nav-profile .nav-link:hover{
+      color:var(--accent3);
+      background:var(--card-bg);
+      border-color:var(--accent2) var(--accent2) transparent;
+    }
+    /* liquid-glass card */
+    .card-glass{
+      position:relative;
+      background:var(--card-bg);
+      border:1px solid var(--card-border);
+      border-radius:20px;
+      overflow:hidden;
+      backdrop-filter:blur(22px) saturate(160%);
+      -webkit-backdrop-filter:blur(22px) saturate(160%);
+      transition:.25s;
+    }
+    .card-glass::before{
+      content:'';
+      position:absolute;inset:0;
+      background:var(--glass-grad);
+      animation:moveGradient 6s ease-in-out infinite alternate;
+      pointer-events:none;
+    }
+    .card-glass:hover{transform:translateY(-4px)}
+    @keyframes moveGradient{
+      0%{transform:translate(0,0)}
+      100%{transform:translate(-40%,-60%)}
+    }
+    .form-control,.form-select{
+      background:rgba(255,255,255,0.05)!important;
+      border:1px solid rgba(255,255,255,0.15)!important;
+      color:var(--text-light)!important;
+      border-radius:12px!important;
+    }
+    .form-label{color:var(--accent2);font-weight:500}
+    .btn-primary{
+      background:linear-gradient(135deg,var(--accent1),var(--accent2));
+      border:none;color:#000;font-weight:600;
+    }
+    .btn-primary:hover{filter:brightness(1.1);color:#000}
+  </style>
 {% endblock %}
 
+{% block member_content %}
+<div class="d-flex justify-content-center">
+  <div class="w-100" style="max-width:720px">
+
+    <ul class="nav nav-tabs nav-profile mb-4">
+      <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-base">基本資料</button></li>
+      <li class="nav-item"><button class="nav-link"         data-bs-toggle="tab" data-bs-target="#tab-sec">安全設定</button></li>
+      <li class="nav-item"><button class="nav-link"         data-bs-toggle="tab" data-bs-target="#tab-pref">偏好 / 會員</button></li>
+    </ul>
+
+    <div class="tab-content">
+
+      <div class="tab-pane fade show active" id="tab-base">
+        <form method="POST" enctype="multipart/form-data" class="card-glass p-4 mb-5 shadow-lg">
+          {{ form.hidden_tag() }}
+          <h5 class="mb-4 fw-bold text-white">基本資料</h5>
+
+          <div class="mb-4 text-center">
+            <img id="avatarPreview"
+                 src="{{ current_user.avatar_url or url_for('static', filename='img/default-avatar.png') }}"
+                 class="rounded-circle mb-2" width="110" height="110"/>
+            <div>{{ form.avatar(class_="form-control form-control-sm d-inline-block w-auto") }}</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">使用者名稱</label>
+            {{ form.username(class_="form-control") }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">電子郵件</label>
+            {{ form.email(class_="form-control") }}
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">時區</label>
+              <select name="timezone" class="form-select">
+                {% for tz,label in [("UTC","UTC"),("Asia/Taipei","台北"),("America/New_York","紐約")] %}
+                  <option value="{{tz}}" {{ "selected" if current_user.timezone==tz else "" }}>{{label}}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">介面語言</label>
+              <select name="language" class="form-select">
+                {% for code,label in [("zh-TW","繁體中文"),("en-US","English")] %}
+                  <option value="{{code}}" {{ "selected" if current_user.language==code else "" }}>{{label}}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <button class="btn btn-primary w-100 mt-4">儲存變更</button>
+        </form>
+      </div>
+
+      <div class="tab-pane fade" id="tab-sec">
+        <form method="POST" action="{{ url_for('member.security') }}" class="card-glass p-4 mb-5 shadow-lg">
+          <h5 class="mb-4 fw-bold text-white">變更密碼</h5>
+
+          <div class="mb-3"><label class="form-label">舊密碼</label><input name="old_password" type="password" class="form-control" required></div>
+          <div class="mb-3"><label class="form-label">新密碼</label><input name="new_password" type="password" class="form-control" minlength="6" required></div>
+          <div class="mb-4"><label class="form-label">確認新密碼</label><input name="confirm_new_password" type="password" class="form-control" minlength="6" required></div>
+
+          <button name="submit_password" value="1" class="btn btn-primary w-100">更新密碼</button>
+
+          <hr class="my-4">
+          <h5 class="mb-3 fw-bold text-white">兩步驗證 (2FA)</h5>
+          {% if current_user.two_factor_secret %}
+            <div class="alert alert-success p-2">已啟用 2FA</div>
+            <button class="btn btn-secondary w-100" disabled>已啟用</button>
+          {% else %}
+            <div class="alert alert-secondary p-2">尚未啟用，可提升安全。</div>
+            <button name="enable_2fa" value="1" class="btn btn-primary w-100">立即啟用</button>
+          {% endif %}
+        </form>
+      </div>
+
+      <div class="tab-pane fade" id="tab-pref">
+        <div class="card-glass p-4 mb-5 shadow-lg">
+          <h5 class="mb-4 fw-bold text-white">會員方案</h5>
+          <p class="mb-2">目前等級：<span class="fw-bold text-info">{{ current_user.membership_level|upper }}</span></p>
+          <p class="mb-4">訂閱狀態：<span class="fw-bold text-info">{{ current_user.subscription_status }}</span></p>
+          <a href="{{ url_for('member.subscription') }}" class="btn btn-primary w-100">升級 / 查看方案</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
 {% block scripts %}
   {{ super() }}
   <script>
-    const avatarInput = document.querySelector('input[type="file"][name="avatar"]');
-    const avatarPreview = document.getElementById('avatarPreview');
-    avatarInput?.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => avatarPreview.src = ev.target.result;
-      reader.readAsDataURL(file);
+    const avatarInput=document.querySelector('input[type=file][name=avatar]');
+    const avatarPreview=document.getElementById('avatarPreview');
+    avatarInput?.addEventListener('change',e=>{
+      const f=e.target.files[0];
+      if(!f) return;
+      const r=new FileReader();
+      r.onload=ev=>avatarPreview.src=ev.target.result;
+      r.readAsDataURL(f);
     });
   </script>
 {% endblock %}

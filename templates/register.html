@@ -5,23 +5,23 @@
 <div class="row justify-content-center">
   <div class="col-md-6">
     <h2 class="mb-4">會員註冊</h2>
-    <form method="post" novalidate>
+    <form method="post">
       {{ form.hidden_tag() }}
       <div class="mb-3">
         <label class="form-label">使用者名稱</label>
-        {{ form.username(class="form-control", minlength=3, maxlength=20, autocomplete="off") }}
+        {{ form.username(class="form-control", minlength=3, maxlength=20, required=True, autocomplete="off", placeholder="3～20 個字元") }}
       </div>
       <div class="mb-3">
         <label class="form-label">電子郵件</label>
-        {{ form.email(type="email", class="form-control", autocomplete="off") }}
+        {{ form.email(type="email", class="form-control", required=True, autocomplete="off", placeholder="example@domain.com") }}
       </div>
       <div class="mb-3">
         <label class="form-label">密碼</label>
-        {{ form.password(type="password", class="form-control", minlength=6) }}
+        {{ form.password(type="password", class="form-control", minlength=6, required=True, placeholder="至少 6 個字元") }}
       </div>
       <div class="mb-3">
         <label class="form-label">確認密碼</label>
-        {{ form.confirm(type="password", class="form-control", minlength=6) }}
+        {{ form.confirm(type="password", class="form-control", minlength=6, required=True, placeholder="再輸入一次密碼") }}
       </div>
 
       {% if recaptcha_site_key %}
@@ -31,7 +31,7 @@
       {% endif %}
 
       <div class="d-grid">
-        <button class="btn btn-success">註冊</button>
+        <button type="submit" class="btn btn-success">註冊</button>
       </div>
     </form>
 

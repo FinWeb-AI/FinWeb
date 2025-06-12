@@ -2,144 +2,332 @@
 
 {% block head %}
   {{ super() }}
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
   <style>
-    /* --- Layout --- */
-    #member-layout {
-      display: flex;
-      min-height: 100vh;
+    /*–––– Liquid Glass 主題變數 ‒–––*/
+    :root{
+      --bg-main:        #0b0e17;
+      --sidebar-bg:     #121418;
+
+      --card-bg:        rgba(255,255,255,0.04);
+      --card-border:    rgba(255,255,255,0.18);
+      --glass-grad:     radial-gradient(140% 160% at 0 0,
+                          rgba(255,255,255,0.24) 0%,
+                          rgba(255,255,255,0.04) 60%,
+                          transparent 100%);
+
+      --text-primary:   #e8ecff;
+      --text-secondary: #94a3b8;
+
+      --accent1:        #9F7BFF;   /* 薰衣紫 */
+      --accent2:        #6AE3FF;   /* 晴空藍 */
+
+      --highlight-white: rgba(255,255,255,0.12);
+
+      /* 新增 Pie Chart 高對比色 */
+      --pie1:           #FF6384;
+      --pie2:           #36A2EB;
+      --pie3:           #FFCE56;
+      --pie4:           #4BC0C0;
+      --pie5:           #9966FF;
     }
-    /* 側欄 */
-    #member-sidebar {
-      flex: 0 0 220px;
-      width: 220px;
-      position: fixed;
-      top: 56px; bottom: 0; left: 0;
-      background: linear-gradient(180deg, #556cd6, #8e44ad);
-      color: #fff;
-      padding-top: 1rem;
-      overflow-y: auto;
-      z-index: 1020;
+
+    body{
+      background: var(--bg-main);
+      color: var(--text-primary);
+      font-family:'Rajdhani',sans-serif;
+      margin:0; padding:0; overflow-x:hidden;
     }
-    /* 側欄連結 */
-    #member-sidebar .nav-link {
-      color: #fff;
-      padding: 0.75rem 1rem;
+    h1,h2,h3,h4,h5,h6,.metric-title{
+      font-family:'Orbitron',sans-serif;
+    }
+
+    /*–––– 側邊欄 ––––*/
+    #member-sidebar{
+      position:fixed; top:56px; bottom:0; left:0;
+      width:220px; background:var(--sidebar-bg);
+      border-right:1px solid var(--card-border);
+      padding-top:1rem; z-index:100;
+    }
+    #member-sidebar .nav-link{
+      display:flex; align-items:center;
+      padding:.75rem 1rem;
+      color:var(--text-secondary); font-weight:500;
+      transition:.2s;
     }
     #member-sidebar .nav-link.active,
-    #member-sidebar .nav-link:hover {
-      background: rgba(255,255,255,0.15);
+    #member-sidebar .nav-link:hover{
+      background:rgba(154,119,255,0.12);
+      color:var(--accent1);
     }
-    /* 主區 */
-    #member-main {
-      margin-left: 220px;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: #0f141c;
-      padding: 1.5rem;
-    }
-    .member-content {
-      flex: 1;
+    #member-sidebar .fas{ width:1.2em; margin-right:.5rem; color:var(--accent2) }
+
+    /*–––– 主要內容區 ––––*/
+    #member-main{
+      margin-left:220px; padding:2rem;
+      display:grid; grid-template-rows:auto auto 1fr;
+      row-gap:2rem; min-height:100vh;
     }
 
-    /* --- 指標卡 --- */
-    .metric-card .card-body {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      min-height: 140px;
+    /*–––– Liquid Card ––––*/
+    .card-glass{
+      position:relative;
+      background:var(--card-bg);
+      border:1px solid var(--card-border);
+      border-radius:20px; overflow:hidden;
+      backdrop-filter: blur(18px) saturate(160%);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      transition:.25s;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
     }
-    .metric-title {
-      font-size: 1rem;
-      font-weight: 500;
-      margin-bottom: 0.25rem;
+    .card-glass::before{
+      content:''; position:absolute; inset:0;
+      background:var(--glass-grad);
+      animation:moveGrad 6s ease-in-out infinite alternate;
+      pointer-events:none;
     }
-    .metric-value {
-      font-size: 2.5rem;
-      font-weight: 700;
-      line-height: 1;
-      font-family: 'Roboto', sans-serif;
+    .card-glass:hover{ transform:translateY(-4px) }
+    @keyframes moveGrad{0%{transform:translate(0,0)}100%{transform:translate(-40%,-60%)}}
+
+    /*–––– Header 卡 ––––*/
+    .header-card{
+      background:var(--card-bg);
+      border:1px solid var(--card-border);
+      border-radius:20px; overflow:hidden;
+      backdrop-filter: blur(18px) saturate(160%);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      padding:1.5rem;
+      display:flex;justify-content:space-between;align-items:center;
+      transition:.25s;
+    }
+    .header-card:hover{ transform:translateY(-4px) }
+    .header-card h2{ margin:0; color:var(--accent2) }
+    .header-card small{ color:var(--text-secondary) }
+    .header-card .btn-primary{
+      background:transparent; border:1px solid var(--accent2);
+      color:var(--accent2); font-weight:600; padding:.45rem 1rem; border-radius:10px;
+    }
+    .header-card .btn-primary:hover{
+      background:var(--accent2); color:#000;
     }
 
-    /* 圖表卡 固定高度 */
-    .card-chart {
-      height: 360px;
+    /*–––– 指標卡 ––––*/
+    .metrics-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1.5rem }
+    .metric-card{
+      background:var(--card-bg);
+      border:1px solid var(--card-border);
+      border-radius:20px;
+      backdrop-filter: blur(18px) saturate(160%);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      padding:1.5rem;
+      text-align:center;
+      transition:.25s;
+    }
+    .metric-card:hover{ transform:translateY(-4px) }
+    .metric-title{
+      color:var(--text-secondary);
+      text-transform:uppercase;
+      font-size:.85rem;
+      margin-bottom:.5rem;
+    }
+    .metric-value{
+      font-size:2rem;
+      font-weight:700;
+      color:var(--accent1);
     }
 
-    /* dark card */
-    .card-dark {
-      background-color: #1f2937;
-      color: #fff;
-      border: none;
+    /*–––– 圖表卡 ––––*/
+    .charts-grid{ display:grid; grid-template-columns:1fr 1fr; gap:1.5rem }
+    .chart-card{
+      position:relative;
+      background:var(--card-bg);
+      border:1px solid var(--card-border);
+      border-radius:20px; overflow:hidden;
+      backdrop-filter: blur(18px) saturate(160%);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      transition:.25s;
+      display:flex;flex-direction:column;
+      height:370px;
     }
-    .card-dark .card-header,
-    .card-dark .card-body {
-      background-color: #1f2937;
+    .chart-card:hover{ transform:translateY(-4px) }
+    .chart-card .card-header{
+      display:flex;justify-content:space-between;align-items:center;
+      padding:1rem 1.2rem; border-bottom:1px solid var(--card-border);
+      background: rgba(255,255,255,0.06);
+      color:var(--text-secondary);
+      font-family:'Orbitron',sans-serif;
+    }
+    .chart-card .card-header span{ color:var(--accent1); font-weight:600 }
+    .chart-card .card-body {
+      flex: 1; padding: 1rem; position: relative;
+      background: rgba(255,255,255,0.08);
+      border-radius: 12px;
+    }
+    .chart-card .card-body canvas{
+      width:100%!important; height:100%!important;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
 
-    /* 漸層工具類 */
-    .gradient-green-blue { background: linear-gradient(90deg,#a8ff78,#78ffd6)!important; }
-    .gradient-purple     { background: linear-gradient(90deg,#7b2ff7,#f107a3)!important; }
-    .gradient-yellow-orange { background: linear-gradient(90deg,#fddb92,#d1fdff)!important; }
+    /* 通用表格 (如有) */
+    table.table{
+      width:100%; border-collapse:separate; border-spacing:0;
+      background:var(--card-bg);
+      border:1px solid var(--card-border);
+      border-radius:12px; backdrop-filter:blur(8px);
+      overflow:hidden;
+    }
+    table.table thead th{
+      background:var(--highlight-white);
+      color:var(--text-primary);
+      border-bottom:1px solid var(--card-border);
+    }
+    table.table tbody td{
+      background:rgba(255,255,255,0.05);
+      color:var(--text-secondary);
+      border-top:1px solid var(--card-border);
+    }
   </style>
 {% endblock %}
 
 {% block content %}
 <div id="member-layout">
   <aside id="member-sidebar">
-    <nav class="nav flex-column">
-      <a class="nav-link {% if request.endpoint=='member.dashboard' %}active{% endif %}"
-         href="{{ url_for('member.dashboard') }}">
-        <i class="fas fa-tachometer-alt me-2"></i>儀表板
-      </a>
-      <a class="nav-link {% if request.endpoint=='member.profile' %}active{% endif %}"
-         href="{{ url_for('member.profile') }}">
-        <i class="fas fa-user me-2"></i>個人檔案
-      </a>
-      <a class="nav-link {% if request.endpoint=='member.settings' %}active{% endif %}"
-         href="{{ url_for('member.settings') }}">
-        <i class="fas fa-cog me-2"></i>帳戶設定
-      </a>
-      <a class="nav-link {% if request.endpoint=='member.security' %}active{% endif %}"
-         href="{{ url_for('member.security') }}">
-        <i class="fas fa-shield-alt me-2"></i>安全中心
-      </a>
-      <a class="nav-link {% if request.endpoint=='member.subscription' %}active{% endif %}"
-         href="{{ url_for('member.subscription') }}">
-        <i class="fas fa-file-invoice-dollar me-2"></i>帳單與訂閱
-      </a>
-      <a class="nav-link {% if request.endpoint=='member.api_keys' %}active{% endif %}"
-         href="{{ url_for('member.api_keys') }}">
-        <i class="fas fa-key me-2"></i>API 金鑰
-      </a>
-      <a class="nav-link {% if request.endpoint=='member.teams' %}active{% endif %}"
-         href="{{ url_for('member.teams') }}">
-        <i class="fas fa-users me-2"></i>團隊管理
-      </a>
-      <a class="nav-link {% if request.endpoint=='member.audit_logs' %}active{% endif %}"
-         href="{{ url_for('member.audit_logs') }}">
-        <i class="fas fa-book me-2"></i>稽核日誌
-      </a>
-      <a class="nav-link {% if request.endpoint=='member.notifications' %}active{% endif %}"
-         href="{{ url_for('member.notifications') }}">
-        <i class="fas fa-bell me-2"></i>通知
-      </a>
-      <a class="nav-link {% if request.endpoint=='member.data_export' %}active{% endif %}"
-         href="{{ url_for('member.data_export') }}">
-        <i class="fas fa-download me-2"></i>資料匯出
-      </a>
-    </nav>
-    <div class="mt-auto">
-      <a class="nav-link" href="{{ url_for('logout') }}">
-        <i class="fas fa-sign-out-alt me-2"></i>登出
-      </a>
-    </div>
+    {% include 'member/_sidebar.html' %}
   </aside>
 
   <main id="member-main">
-    <section class="member-content">
-      {% block member_content %}{% endblock %}
-    </section>
+    <div class="header-card">
+      <div>
+        <h2>歡迎回來，{{ current_user.username }}！</h2>
+        <small id="now-time"></small>
+      </div>
+      <div>
+        <button class="btn-primary"
+                onclick="location.href='{{ url_for('member.api_keys') }}'">
+          <i class="fas fa-key me-2"></i> 管理 API 金鑰
+        </button>
+      </div>
+    </div>
+
+    {% if request.endpoint == 'member.dashboard' %}
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-title">總資產</div>
+          <div class="metric-value">NT$ {{ total_assets|comma_separator }}</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">24H 漲跌</div>
+          <div class="metric-value">{{ change_24h }}%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">API 調用次數</div>
+          <div class="metric-value">{{ api_calls }}</div>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="card-header">
+            <span>資產走勢</span><i class="fas fa-chart-line"></i>
+          </div>
+          <div class="card-body">
+            <canvas id="assetTrendChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="card-header">
+            <span>組合分佈</span><i class="fas fa-chart-pie"></i>
+          </div>
+          <div class="card-body">
+            <canvas id="portfolioPieChart"></canvas>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% block member_content %}{% endblock %}
   </main>
 </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    document.getElementById('now-time').textContent =
+      new Date().toLocaleString('zh-TW',{hour12:false});
+  </script>
+  {% if request.endpoint == 'member.dashboard' %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    new Chart(document.getElementById('assetTrendChart'), {
+      type:'line',
+      data:{
+        labels: {{ asset_trend|map(attribute='label')|list|tojson }},
+        datasets:[{
+          data: {{ asset_trend|map(attribute='value')|list|tojson }},
+          borderColor: 'var(--accent2)',
+          backgroundColor: 'rgba(106,227,255,0.25)',
+          tension: 0.4,
+          pointRadius: 4,
+          pointBackgroundColor: 'var(--accent2)'
+        }]
+      },
+      options:{
+        maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{
+            ticks:{ color:'var(--text-secondary)' },
+            grid:{ color:'rgba(255,255,255,0.12)' }
+          },
+          y:{
+            beginAtZero:true,
+            ticks:{ color:'var(--text-secondary)' },
+            grid:{ color:'rgba(255,255,255,0.12)' }
+          }
+        }
+      }
+    });
+
+    new Chart(document.getElementById('portfolioPieChart'), {
+      type:'pie',
+      data:{
+        labels: {{ portfolio_dist|map(attribute='label')|list|tojson }},
+        datasets:[{
+          data: {{ portfolio_dist|map(attribute='value')|list|tojson }},
+          backgroundColor:[
+            'var(--pie1)','var(--pie2)','var(--pie3)',
+            'var(--pie4)','var(--pie5)'
+          ],
+          borderWidth:2,
+          borderColor:'var(--bg-main)'
+        }]
+      },
+      options:{
+        maintainAspectRatio:false,
+        plugins:{
+          legend:{
+            display:true,
+            position:'bottom',
+            labels:{
+              color:'var(--text-secondary)',
+              boxWidth:12,
+              padding:16
+            }
+          },
+          tooltip:{
+            backgroundColor:'rgba(0,0,0,0.7)',
+            titleColor:'var(--text-primary)',
+            bodyColor:'var(--text-secondary)'
+          }
+        }
+      }
+    });
+  </script>
+  {% endif %}
 {% endblock %}

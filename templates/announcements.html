@@ -1,29 +1,108 @@
 {% extends "base.html" %}
 {% block title %}公告專區 – FinWeb{% endblock %}
 
-{% block content %}
-<section class="py-5" style="background-color: #16262b;">
-  <div class="container">
-    <!-- 標題與搜尋 -->
-    <div class="text-center mb-5">
-      <h2 class="section-title">公告專區</h2>
-      <p class="text-white-50">查看最新系統公告與活動消息，隨時保持資訊更新。</p>
-      <input id="news-search" type="text"
-             class="form-control form-control-lg home-llm-input w-50 mx-auto"
-             placeholder="搜尋公告..." />
-    </div>
+{% block head %}
+  {{ super() }}
+  <style>
+    /* ===== 和首頁一致的玻璃卡 & 按鈕 ===== */
+    .glass-card {
+      position: relative;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-br);
+      border-radius: 28px;
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      overflow: hidden;
+      box-shadow: 0 8px 28px rgba(0,0,0,.40);
+      transition: .35s;
+    }
+    .glass-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background: linear-gradient(140deg,
+        rgba(159,123,255,.45),
+        rgba(106,227,255,.45),
+        transparent 80%);
+      mask: linear-gradient(#fff 0 0) content-box,
+            linear-gradient(#fff 0 0);
+      mask-composite: xor;
+      -webkit-mask-composite: xor;
+      padding: 1px;
+    }
+    .glass-card:hover { transform: translateY(-6px) }
 
-    <!-- 公告卡片列表 -->
+    .btn-hero {
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.25);
+      color: #fff;
+      font-weight: 600;
+      min-width: 140px;
+      transition: .25s;
+      backdrop-filter: blur(12px);
+    }
+    .btn-hero:hover {
+      background: linear-gradient(135deg, var(--accent1), var(--accent2));
+      color: #000;
+      box-shadow: 0 0 12px rgba(106,227,255,.6);
+    }
+
+    /* Hero 小調整 */
+    .announce-hero {
+      padding: 5rem 0;
+      text-align: center;
+    }
+    .announce-hero h2 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .announce-hero p {
+      color: #ced4da;
+      font-size: 1.1rem;
+      margin-top: .5rem;
+    }
+    .home-llm-input {
+      background: rgba(255,255,255,.03) !important;
+      border: 1px solid rgba(255,255,255,.2) !important;
+      color: #fff !important;
+    }
+    .home-llm-input::placeholder {
+      color: rgba(255,255,255,.5) !important;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<section class="announce-hero">
+  <div class="container">
+    <div class="glass-card animate__animated animate__fadeInDown p-4 mx-auto" style="max-width:720px">
+      <h2>公告專區</h2>
+      <p>查看最新系統公告與活動消息，隨時保持資訊更新。</p>
+      <input id="news-search" type="text"
+             class="form-control form-control-lg home-llm-input w-75 mx-auto mt-3"
+             placeholder="搜尋公告…" />
+    </div>
+  </div>
+</section>
+
+<!-- 公告列表 -->
+<section class="py-5">
+  <div class="container">
     <div class="row g-4" id="announcements-row">
       {% for ann in announcements %}
       <div class="col-md-4 animate__animated animate__fadeInUp" data-title="{{ ann.title|lower }}">
-        <div class="card bg-dark text-white h-100 p-4">
-          <div class="news-date mb-2">{{ ann.date }}</div>
-          <div class="news-title mb-3">{{ ann.title }}</div>
-          <p class="flex-grow-1">{{ ann.summary_full }}</p>
+        <div class="glass-card h-100 p-4 d-flex flex-column">
+          <div class="news-date text-white-50 mb-2">{{ ann.date }}</div>
+          <h5 class="text-white mb-3">{{ ann.title }}</h5>
+          <p class="text-white-50 flex-grow-1">{{ ann.summary_full }}</p>
           {% if ann.link %}
           <div class="mt-3 text-end">
-            <a href="{{ ann.link }}" class="btn btn-outline-light btn-sm">外部閱讀</a>
+            <a href="{{ ann.link }}" class="btn btn-hero btn-sm">閱讀更多</a>
           </div>
           {% endif %}
         </div>
@@ -35,13 +114,13 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-  // 關鍵字過濾
-  document.getElementById('news-search').addEventListener('input', function(){
-    const q = this.value.toLowerCase();
-    document.querySelectorAll('#announcements-row [data-title]').forEach(el=>{
-      el.style.display = el.getAttribute('data-title').includes(q) ? '' : 'none';
+  {{ super() }}
+  <script>
+    document.getElementById('news-search').addEventListener('input', function(){
+      const q = this.value.toLowerCase();
+      document.querySelectorAll('#announcements-row [data-title]').forEach(el=>{
+        el.style.display = el.dataset.title.includes(q) ? '' : 'none';
+      });
     });
-  });
-</script>
+  </script>
 {% endblock %}

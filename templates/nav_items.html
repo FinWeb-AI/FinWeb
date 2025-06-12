@@ -1,0 +1,79 @@
+<ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+  <li class="nav-item">
+    <a class="nav-link {% if request.endpoint == 'market_overview' %}active{% endif %}"
+       href="{{ url_for('market_overview') }}">
+      <i class="fas fa-globe-americas me-1"></i>總覽
+    </a>
+  </li>
+
+  <li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+      <i class="fas fa-chart-bar me-1"></i>即時行情
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a class="dropdown-item {% if request.endpoint == 'stocks.stocks_page' %}active{% endif %}"
+           href="{{ url_for('stocks.stocks_page') }}">股票</a>
+      </li>
+      <li>
+        <a class="dropdown-item {% if request.endpoint in ['crypto','index'] %}active{% endif %}"
+           href="{{ url_for('crypto') }}">加密貨幣</a>
+      </li>
+    </ul>
+  </li>
+
+  <li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+      <i class="fas fa-tools me-1"></i>分析工具
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a class="dropdown-item {% if request.endpoint == 'sentiment.sentiment' %}active{% endif %}"
+           href="{{ url_for('sentiment.sentiment') }}">情緒雷達</a>
+      </li>
+      <li>
+        <a class="dropdown-item {% if request.endpoint == 'cv_pattern.cv_pattern' %}active{% endif %}"
+           href="{{ url_for('cv_pattern.cv_pattern') }}">圖像辨識</a>
+      </li>
+      <li>
+        <a class="dropdown-item {% if request.endpoint == 'forecast.forecast' %}active{% endif %}"
+           href="{{ url_for('forecast.forecast') }}">AI 預測</a>
+      </li>
+    </ul>
+  </li>
+
+  <li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+      <i class="fas fa-retweet me-1"></i>策略工具
+    </a>
+    <ul class="dropdown-menu">
+      <li>
+        <a class="dropdown-item {% if request.endpoint.startswith('backtest.') %}active{% endif %}"
+           href="{{ url_for('backtest.backtest_home') }}">策略回測</a>
+      </li>
+      <li>
+        <a class="dropdown-item {% if request.endpoint.startswith('portfolio.') %}active{% endif %}"
+           href="{{ url_for('portfolio.portfolio_home') }}">投組風險</a>
+      </li>
+    </ul>
+  </li>
+
+  <li class="nav-item">
+    <a class="nav-link {% if request.endpoint == 'metaverse.metaverse' %}active{% endif %}"
+       href="{{ url_for('metaverse.metaverse') }}">
+      <i class="fas fa-vr-cardboard me-1"></i>元宇宙新聞
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('sponsor') }}">
+      <i class="fas fa-hand-holding-dollar me-1"></i>贊助我們
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ url_for('about') }}">
+      <i class="fas fa-info-circle me-1"></i>關於我們
+    </a>
+  </li>
+
+</ul>

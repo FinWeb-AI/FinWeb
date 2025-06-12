@@ -1,12 +1,174 @@
 {% extends "member/base_member.html" %}
 {% block member_content %}
-<h1 class="text-2xl font-bold mb-4">安全中心</h1>
-<form method="POST">
-  {{ form.hidden_tag() }}
-  <h2 class="font-semibold">更改密碼</h2>
-  <div>{{ form.old_password.label }} {{ form.old_password() }}</div>
-  <div>{{ form.new_password.label }} {{ form.new_password() }}</div>
-  <div>{{ form.confirm_new_password.label }} {{ form.confirm_new_password() }}</div>
-  <button type="submit" name="submit_password" class="btn-primary">{{ form.submit_password.label.text }}</button>
-</form>
+<style>
+  .glass-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 0.75rem;
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    color: #edf1f5;
+  }
+  .glass-card .card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+  .glass-card .card-header i {
+    font-size: 1.4rem;
+    color: #8b5cf6;
+  }
+  .btn-glass {
+    /* 用主色調藍紫漸層，和其他按鈕統一 */
+    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+    border: none;
+    border-radius: 0.5rem;
+    color: #fff;
+    padding: 0.5rem 1.5rem;
+    font-weight: 500;
+    transition: transform .2s, opacity .2s;
+  }
+  .btn-glass:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
+  .btn-glass:active {
+    transform: translateY(0);
+  }
+  .glass-card .form-control::placeholder {
+    color: rgba(255,255,255,0.7) !important;
+    opacity: 1;
+  }
+</style>
+
+<div class="container-fluid py-4">
+  <h1 class="display-5 mb-4 text-white">🔒 安全中心</h1>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      {% for cat, msg in msgs %}
+        <div class="alert alert-{{ 
+             'danger' if cat=='danger' else 
+             'warning' if cat=='warning' else 
+             'info' if cat=='info' else 
+             'success' }}"
+             role="alert">
+          {{ msg }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="row g-4">
+
+    <div class="col-lg-6">
+      <div class="card glass-card shadow-sm p-4">
+        <div class="card-header">
+          <i class="bi bi-key-fill"></i>
+          更改密碼
+        </div>
+        <form method="POST">
+          {{ pwd_form.hidden_tag() }}
+          <div class="mb-3">
+            {{ pwd_form.old_password.label(class="form-label") }}
+            {{ pwd_form.old_password(
+                 class="form-control form-control-sm bg-transparent text-white",
+                 placeholder="請輸入舊密碼") }}
+          </div>
+          <div class="mb-3">
+            {{ pwd_form.new_password.label(class="form-label") }}
+            {{ pwd_form.new_password(
+                 class="form-control form-control-sm bg-transparent text-white",
+                 placeholder="請輸入新密碼") }}
+          </div>
+          <div class="mb-3">
+            {{ pwd_form.confirm_new_password.label(class="form-label") }}
+            {{ pwd_form.confirm_new_password(
+                 class="form-control form-control-sm bg-transparent text-white",
+                 placeholder="再次輸入新密碼") }}
+          </div>
+          {{ pwd_form.submit_password(class="btn-glass w-100") }}
+        </form>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card glass-card shadow-sm p-4">
+        <div class="card-header">
+          <i class="bi bi-envelope-fill"></i>
+          電子郵件驗證
+        </div>
+        <p>目前信箱：<strong>{{ current_user.email }}</strong></p>
+        <p>驗證狀態：
+          {% if current_user.confirmed %}
+            <span class="badge bg-success">已驗證</span>
+          {% else %}
+            <span class="badge bg-warning">未驗證</span>
+          {% endif %}
+        </p>
+        {% if not current_user.confirmed %}
+        <form method="POST" class="mt-3">
+          {{ mail_form.hidden_tag() }}
+          {{ mail_form.resend_email(class="btn-glass w-100") }}
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card glass-card shadow-sm p-4">
+        <div class="card-header">
+          <i class="bi bi-shield-lock-fill"></i>
+          雙因素認證 (2FA)
+        </div>
+        {% if current_user.two_factor_secret %}
+          <p class="text-success mb-3">2FA 已啟用，請掃描下方 QR Code：</p>
+          <img
+            <img src="{{ url_for('member.two_factor_qr') }}"
+            alt="2FA QR Code"
+            class="mb-2 rounded border border-white/20" />
+          />
+          <p class="text-white break-all mb-3">
+            <code>{{ current_user.two_factor_secret }}</code>
+          </p>
+          <form method="POST">
+            {{ twof_form.hidden_tag() }}
+            {{ twof_form.disable_2fa(class="btn-glass w-100") }}
+          </form>
+        {% else %}
+          <p class="text-secondary mb-3">尚未啟用 2FA，可提高帳戶安全性。</p>
+          <form method="POST">
+            {{ twof_form.hidden_tag() }}
+            {{ twof_form.enable_2fa(class="btn-glass w-100") }}
+          </form>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card glass-card shadow-sm p-4">
+        <div class="card-header">
+          <i class="bi bi-person-fill"></i>
+          登入資訊
+        </div>
+        <ul class="list-unstyled mb-0">
+          <li>上次登入：
+            {% if current_user.last_login %}
+              {{ current_user.last_login|datetime }}
+            {% else %}-{% endif %}
+          </li>
+          <li>失敗次數： {{ current_user.failed_login }}</li>
+          <li>鎖定至：
+            {% if current_user.locked_until and current_user.locked_until > now_ts %}
+              {{ current_user.locked_until|ts2date }}
+            {% else %}-{% endif %}
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

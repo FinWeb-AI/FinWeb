@@ -1,0 +1,52 @@
+{% extends "member/base_member.html" %}
+{% block member_content %}
+<div class="card-glass p-4 mx-auto" style="max-width:600px;">
+  <h2 class="mb-4">編輯使用者：{{ user.username }}</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.username.label(class="form-label") }}
+      {{ form.username(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.is_admin.label(class="form-label") }}
+      {{ form.is_admin(class="form-select") }}
+    </div>
+
+    <hr>
+    <div class="mb-3">
+      <label class="form-label">電子郵件</label>
+      <input type="text" class="form-control" value="{{ user.email }}" readonly>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">註冊時間</label>
+      <input type="text" class="form-control" value="{{ user.created|datetime }}" readonly>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">電子郵件驗證</label>
+      <input type="text" class="form-control"
+             value="{{ '已驗證' if user.confirmed else '未驗證' }}" readonly>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">密碼雜湊</label>
+      <textarea class="form-control" rows="2" readonly
+                style="font-family:monospace; word-break:break-all;">{{ user.password }}</textarea>
+    </div>
+
+    <div class="d-flex justify-content-between">
+      <div>
+        <a href="{{ url_for('member.admin_users') }}"
+           class="btn btn-outline-light">取消</a>
+      </div>
+      <div class="d-flex gap-2">
+        <form method="POST"
+              action="{{ url_for('member.admin_delete_user', uid=user.id) }}"
+              onsubmit="return confirm('確定要刪除 {{ user.username }} 嗎？此操作不可還原！');">
+          <button type="submit" class="btn btn-danger">刪除使用者</button>
+        </form>
+        {{ form.submit(class="btn btn-primary") }}
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

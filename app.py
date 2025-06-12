@@ -1,23 +1,29 @@
 from __future__ import annotations
-import os
+import os,secrets
 import uuid
 import logging
 import configparser
 import requests
+import sys
+sys.modules['app'] = sys.modules[__name__]
 import time
 import re
 import hashlib
+from math import ceil  
 from sqlalchemy.orm import synonym
 from pathlib import Path
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet,InvalidToken
 import base64
-
+import qrcode
+import tempfile
+from io import BytesIO,StringIO
+import io, csv
 FERNET_KEY = "9gfBuQFUmVv1_iGpUk3X8N3zPBsGPv0TQlf60OjYH9U="
 f = Fernet(FERNET_KEY.encode())
 from flask import (
     Flask, render_template, request, redirect,
-    url_for, jsonify, flash, abort, session, Blueprint
+    url_for, jsonify, flash, abort, session, Blueprint,send_file,make_response
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -31,7 +37,7 @@ from wtforms import (
     StringField, PasswordField, SubmitField,
     SelectField, FileField
 )
-from wtforms.validators import DataRequired, Email, EqualTo, Length
+from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
 from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -39,11 +45,11 @@ from passlib.hash import argon2
 from sqlalchemy import text, ForeignKey,func
 import yfinance as yf
 import google.generativeai as genai
-
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-
+import pyotp
+import time
 from stocks import stock_bp
 from sentiment import sent_bp
 from cv_pattern import cv_bp
@@ -52,6 +58,8 @@ from backtest import bt_bp
 from portfolio import pf_bp
 from metaverse import mv_bp
 from trend_analysis import trend_bp
+from member_bp import member_bp
+
 
 try:
     from zoneinfo import ZoneInfo
@@ -68,13 +76,13 @@ CFG.read("config.ini", encoding="utf-8")
 # 資料庫路徑（SQLite），確保路徑存在
 DB_PATH = Path(CFG["DEFAULT"]["DB_PATH"]).resolve()
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+TMP_DIR = tempfile.gettempdir()
 
 # 建立 Flask app
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("SECRET_KEY", os.urandom(32).hex())
 app.register_blueprint(stock_bp, url_prefix="/stocks")
 app.register_blueprint(trend_bp, url_prefix="/analysis")
-
 # 強制 HTTPS，允許所有 CSP
 Talisman(app, force_https=True, content_security_policy=None)
 
@@ -163,6 +171,7 @@ class User(UserMixin, db.Model):
     membership_level    = db.Column(db.String(32), default="free")
     subscription_status = db.Column(db.String(32), default="inactive")
     two_factor_secret   = db.Column(db.String(64))
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
     @property
     def email(self) -> str:
         try:
@@ -178,16 +187,60 @@ class User(UserMixin, db.Model):
     email = synonym('_email', descriptor=email)
     
 class ApiKey(db.Model):
-    id        = db.Column(db.Integer, primary_key=True)
-    user_id   = db.Column(db.Integer, ForeignKey("user.id"), nullable=False)
-    key       = db.Column(db.String(64), unique=True, nullable=False)
-    created   = db.Column(db.Integer, default=lambda: int(time.time()))
+    id           = db.Column(db.Integer, primary_key=True)
+    user_id      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    label        = db.Column(db.String(50))
+    key_hash     = db.Column(db.String(64), nullable=False)
+    key_prefix   = db.Column(db.String(8),  nullable=False)
+    scopes       = db.Column(db.String(50))          # "read,trade"
+    ip_whitelist = db.Column(db.String(255))
+    created_at   = db.Column(db.Integer, default=lambda: int(time.time()))
+    expires_at   = db.Column(db.Integer)
+    last_used    = db.Column(db.Integer)
+    revoked      = db.Column(db.Boolean, default=False)
+
+    @staticmethod
+    def _plain() -> str: return secrets.token_hex(32)   # 64 hex
+    
+    @classmethod
+    def create(cls, user_id:int, **kw):
+        plain = cls._plain()
+        inst  = cls(
+            user_id    = user_id,
+            key_hash   = hashlib.sha256(plain.encode()).hexdigest(),
+            key_prefix = plain[:4] + '…',
+            **kw
+        )
+        db.session.add(inst); db.session.commit()
+
+        # ★ DEBUG
+        app.logger.info(f"[ApiKey.create] uid={user_id}, id={inst.id}, label={inst.label}")
+
+        return inst, plain
+# WTForms：註冊與登入表單
+class _F(FlaskForm):
+    class Meta:
+        csrf = False
+
+# ----------------- WTForm -----------------
+class NewApiKeyForm(_F):
+    label      = StringField("金鑰名稱", validators=[Optional(), Length(0,50)])
+    scopes     = SelectField("權限", choices=[
+                   ("read","READ"),("trade","TRADE"),("write","WRITE")])
+    expires_at = StringField("到期日 (YYYY-MM-DD)", validators=[Optional()])
+    submit     = SubmitField("建立")
 
 class Team(db.Model):
     id        = db.Column(db.Integer, primary_key=True)
     name      = db.Column(db.String(100), nullable=False)
     owner_id  = db.Column(db.Integer, ForeignKey("user.id"), nullable=False)
     created   = db.Column(db.Integer, default=lambda: int(time.time()))
+    owner     = db.relationship("User", backref="teams_owned", lazy="joined")
+    members = db.relationship(
+        "TeamMember",
+        backref="team",
+        cascade="all, delete-orphan"
+    )
 
 class TeamMember(db.Model):
     id        = db.Column(db.Integer, primary_key=True)
@@ -195,7 +248,8 @@ class TeamMember(db.Model):
     user_id   = db.Column(db.Integer, ForeignKey("user.id"), nullable=False)
     role      = db.Column(db.String(32), default="member")
     joined    = db.Column(db.Integer, default=lambda: int(time.time()))
-
+    user = db.relationship("User", backref="team_members", lazy="joined")
+    
 class PortfolioItem(db.Model):
     __tablename__ = 'portfolio_item'
     id        = db.Column(db.Integer, primary_key=True)
@@ -208,6 +262,16 @@ class ApiCallLog(db.Model):
     id        = db.Column(db.Integer, primary_key=True)
     user_id   = db.Column(db.Integer, ForeignKey("user.id"), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+class Notification(db.Model):
+    __tablename__ = 'notification'
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title       = db.Column(db.String(200), nullable=False)
+    body        = db.Column(db.Text, nullable=False)
+    link        = db.Column(db.String(300))
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    is_read     = db.Column(db.Boolean, default=False, nullable=False)    
     
 with app.app_context():
     db.create_all()
@@ -246,11 +310,6 @@ app.register_blueprint(mv_bp,     url_prefix="/")
 def load_user(uid: str) -> User | None:
     return db.session.get(User, int(uid))
 
-# WTForms：註冊與登入表單
-class _F(FlaskForm):
-    class Meta:
-        csrf = False
-
 class RegisterForm(_F):
     username = StringField(validators=[DataRequired(),Length(3,20)])
     email    = StringField(validators=[DataRequired(),Email()])
@@ -270,17 +329,14 @@ class ProfileForm(_F):
     email    = StringField(validators=[DataRequired(),Email()])
     submit   = SubmitField("儲存變更")
 
-class SettingsForm(_F):
-    timezone = SelectField("時區", choices=[("UTC","UTC"),("Asia/Taipei","Asia/Taipei")])
-    language = SelectField("語言", choices=[("zh-TW","繁體中文"),("en-US","English")])
-    submit   = SubmitField("儲存設定")
-
 class SecurityForm(_F):
-    old_password         = PasswordField(validators=[DataRequired()])
-    new_password         = PasswordField(validators=[DataRequired(),Length(6,64)])
-    confirm_new_password = PasswordField(validators=[EqualTo("new_password")])
+    old_password         = PasswordField("舊密碼", validators=[DataRequired()])
+    new_password         = PasswordField("新密碼", validators=[DataRequired(), Length(6,64)])
+    confirm_new_password = PasswordField("確認新密碼", validators=[EqualTo("new_password")])
     submit_password      = SubmitField("更新密碼")
     enable_2fa           = SubmitField("啟用 2FA")
+    disable_2fa          = SubmitField("關閉 2FA")
+    resend_email         = SubmitField("重新寄送驗證信")
 
 class SubscriptionForm(_F):
     membership_level = SelectField(
@@ -296,10 +352,41 @@ class TeamForm(_F):
     submit = SubmitField("新增團隊")
 
 class InviteForm(_F):
-    email  = StringField("邀請人電子郵件", validators=[DataRequired(),Email()])
-    team_id= StringField(validators=[DataRequired()])
-    submit = SubmitField("發送邀請")
-    
+    email  = StringField(
+        "邀請人電子郵件",
+        validators=[DataRequired(), Email()],
+        render_kw={"placeholder": "輸入使用者電子郵件"}
+    )
+    submit = SubmitField("邀請")
+
+class ChangePasswordForm(_F):
+    old_password         = PasswordField("舊密碼", validators=[DataRequired()])
+    new_password         = PasswordField("新密碼", validators=[DataRequired(), Length(6,64)])
+    confirm_new_password = PasswordField("確認新密碼", validators=[EqualTo("new_password")])
+    submit_password      = SubmitField("更新密碼")
+
+class ResendEmailForm(_F):
+    resend_email = SubmitField("重新寄送驗證信")
+
+class TwoFactorForm(_F):
+    enable_2fa  = SubmitField("啟用 2FA")
+    disable_2fa = SubmitField("關閉 2FA")
+
+class DataExportForm(_F):
+    record_type = SelectField(
+        "資料類型",
+        choices=[
+            ("api_calls",     "API 呼叫紀錄"),
+            ("portfolio",     "投資組合項目"),
+            ("teams",         "團隊列表"),
+            ("team_members",  "團隊成員清單"),
+        ],
+        validators=[DataRequired()]
+    )
+    start_date    = StringField("起始日期", validators=[Optional()])
+    end_date      = StringField("結束日期", validators=[Optional()])
+    submit_export = SubmitField("匯出 CSV")
+
 # reCAPTCHA 驗證
 def verify_recaptcha(tok: str) -> bool:
     secret = app.config["RECAPTCHA_SECRET_KEY"]
@@ -379,7 +466,22 @@ ALL_ANNOUNCEMENTS = [
 
 @app.template_filter('comma_separator')
 def comma_separator_filter(val):
-    return f"{val:,.0f}"
+    """
+    將數字加上千分號；若 val 為 None 或無法轉為 float，
+    則回傳 '0'（或原值）。
+    """
+    if val is None:
+        return "0"
+    try:
+        return f"{val:,.0f}"
+    except (ValueError, TypeError):
+        pass
+    try:
+        num = float(val)
+        return f"{num:,.0f}"
+    except (ValueError, TypeError):
+
+        return str(val)
 
 # 首頁與其他靜態頁面
 @app.route("/")
@@ -403,6 +505,7 @@ def stocks():
 def crypto():
     return render_template("index.html")
 
+@limiter.exempt
 @app.route("/assistant")
 @login_required
 def assistant():
@@ -426,6 +529,56 @@ def sponsor():
 @app.route("/about")
 def about():
     return render_template("about.html")
+
+@member_bp.route('/admin', methods=['GET'])
+@login_required
+def admin_panel():
+    if not current_user.is_admin:
+        abort(403)
+    return render_template('member/admin_panel.html')
+
+@member_bp.route('/admin/users')
+@login_required
+def admin_users():
+    if not current_user.is_admin:
+        abort(403)
+    # 分頁參數
+    page    = request.args.get('page', 1, type=int)
+    per_page = 10
+    q = User.query.order_by(User.created.desc())
+    total = q.count()
+    users = q.offset((page-1)*per_page).limit(per_page).all()
+    pages = ceil(total / per_page)
+    return render_template(
+        'member/admin_users.html',
+        users=users,
+        page=page,
+        pages=pages,
+        total=total
+    )
+
+# 顯示 & 處理單一使用者編輯表單
+@member_bp.route('/admin/users/<int:uid>/edit', methods=['GET','POST'])
+@login_required
+def admin_edit_user(uid):
+    if not current_user.is_admin:
+        abort(403)
+    user = User.query.get_or_404(uid)
+    class EditUserForm(FlaskForm):
+        username = StringField('使用者名稱', validators=[DataRequired(), Length(3,20)])
+        is_admin = SelectField('管理員權限', choices=[('0','否'),('1','是')])
+        submit   = SubmitField('儲存變更')
+
+    form = EditUserForm(obj=user)
+    form.is_admin.data = '1' if user.is_admin else '0'
+
+    if form.validate_on_submit():
+        user.username = form.username.data
+        user.is_admin = (form.is_admin.data == '1')
+        db.session.commit()
+        flash(f"使用者 {user.username} 已更新", "success")
+        return redirect(url_for('member.admin_users'))
+    return render_template('member/admin_edit_user.html', form=form, user=user)
 
 # 使用者註冊
 @app.route("/register", methods=["GET", "POST"])
@@ -476,7 +629,6 @@ def register():
         recaptcha_site_key=app.config["RECAPTCHA_SITE_KEY"]
     )
 
-
 @app.route("/confirm", methods=["GET", "POST"])
 def confirm():
     if request.method == "POST":
@@ -502,6 +654,17 @@ def confirm():
             return redirect(url_for("login"))
     return render_template("confirm.html")
 
+@member_bp.route('/admin/users/<int:uid>/delete', methods=['POST'])
+@login_required
+def admin_delete_user(uid):
+    if not current_user.is_admin:
+        abort(403)
+    user = User.query.get_or_404(uid)
+    name = user.username
+    db.session.delete(user)
+    db.session.commit()
+    flash(f"使用者「{name}」已被刪除。", "warning")
+    return redirect(url_for('member.admin_users'))
 
 @app.route("/login", methods=["GET", "POST"])
 @limiter.limit("10 per minute", methods=["POST"])
@@ -592,6 +755,7 @@ def api_crypto_price():
         app.logger.error(f"/api/crypto_price error: {e}")
         return jsonify({"error":"not found"}), 200
 
+
 @app.route("/api/crypto_detail")
 def api_crypto_detail():
     cid = (request.args.get("id") or "bitcoin").lower().strip()
@@ -653,33 +817,11 @@ def api_ohlc():
         app.logger.error(f"/api_ohlc error: {e}")
         return jsonify({"error":"not found"}), 200
 
-member_bp = Blueprint(
-    'member',
-    __name__,
-    template_folder='member',
-    url_prefix='/member'
-)
+import notifications
 
-@member_bp.route('/audit_logs')
-@login_required
-def audit_logs():
-    # TODO:
-    return render_template('member/audit_logs.html')
-
-
-@member_bp.route('/notifications')
-@login_required
-def notifications():
-    # TODO:
-    return render_template('member/notifications.html')
-
-
-@member_bp.route('/data_export')
-@login_required
-def data_export():
-    # TODO:
-    return render_template('member/data_export.html')
-
+@app.template_filter("datetime")
+def _dt(ts):
+    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d") if ts else "-"
 @member_bp.route('/dashboard')
 @login_required
 def dashboard():
@@ -733,8 +875,188 @@ def dashboard():
         asset_trend    = asset_trend,
         portfolio_dist = portfolio_dist
     )
+@member_bp.route('/2fa/qrcode')
+@login_required
+def two_factor_qr():
+    # 確保已經有 secret
+    if not current_user.two_factor_secret:
+        abort(404)
 
-@member_bp.route('/profile', methods=['GET','POST'])
+    # 產生 otpauth URI
+    totp = pyotp.TOTP(current_user.two_factor_secret)
+    uri = totp.provisioning_uri(
+        name=current_user.email,
+        issuer_name="FinWeb"
+    )
+
+    # 用 qrcode 庫畫圖
+    img = qrcode.make(uri)
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+
+    return send_file(buf, mimetype='image/png')
+
+@member_bp.app_template_filter("ts2date")
+def _fmt(ts:int|None): return datetime.fromtimestamp(ts).strftime("%Y-%m-%d") if ts else "-"
+
+@member_bp.route('/audit_logs')
+@login_required
+def audit_logs():
+    start_date = request.args.get('start_date', '')
+    end_date   = request.args.get('end_date', '')
+    page       = request.args.get('page', 1, type=int)
+
+    q = ApiCallLog.query.filter_by(user_id=current_user.id)
+
+    if start_date:
+        try:
+            dt = datetime.strptime(start_date, "%Y-%m-%d")
+            q = q.filter(ApiCallLog.timestamp >= dt)
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            dt2 = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            q = q.filter(ApiCallLog.timestamp < dt2)
+        except ValueError:
+            pass
+
+    q = q.order_by(ApiCallLog.timestamp.desc())
+    pagination = q.paginate(page=page, per_page=10)
+    logs       = pagination.items
+
+    return render_template(
+        'member/audit_logs.html',
+        logs=logs,
+        pagination=pagination,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+@member_bp.route('/notifications', methods=['GET'])
+@login_required
+def notifications():
+    notes = (Notification.query
+             .filter_by(user_id=current_user.id)
+             .order_by(Notification.created_at.desc())
+             .all())
+    return render_template('member/notifications.html', notes=notes)
+
+@member_bp.route('/notifications/mark_read/<int:note_id>', methods=['POST'])
+@login_required
+def mark_notification_read(note_id):
+    note = Notification.query.get_or_404(note_id)
+    if note.user_id != current_user.id:
+        abort(403)
+    note.is_read = True
+    db.session.commit()
+    return redirect(url_for('member.notifications'))
+
+@member_bp.route('/notifications/mark_all_read', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    (Notification.query
+         .filter_by(user_id=current_user.id, is_read=False)
+         .update({Notification.is_read: True}))
+    db.session.commit()
+    return redirect(url_for('member.notifications'))
+
+
+@member_bp.route('/data_export/download/<filename>')
+@login_required
+def download_export(filename):
+    path = os.path.join(TMP_DIR, filename)
+    if not os.path.exists(path):
+        abort(404)
+    return send_file(
+        path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='text/csv'
+    )
+    
+@member_bp.route('/data_export', methods=['GET','POST'])
+@login_required
+def data_export():
+    form = DataExportForm()
+    csv_ready    = False
+    csv_filename = ""
+
+    if form.validate_on_submit():
+        rt = form.record_type.data
+        sd, ed = None, None
+        if rt == 'api_calls':
+            try:
+                if form.start_date.data:
+                    sd = datetime.strptime(form.start_date.data, "%Y-%m-%d")
+                if form.end_date.data:
+                    ed = datetime.strptime(form.end_date.data, "%Y-%m-%d") + timedelta(days=1)
+            except ValueError:
+                flash("日期格式錯誤，請使用 YYYY-MM-DD", "danger")
+                return redirect(url_for('member.data_export'))
+
+            q = ApiCallLog.query.filter_by(user_id=current_user.id)
+            if sd: q = q.filter(ApiCallLog.timestamp >= sd)
+            if ed: q = q.filter(ApiCallLog.timestamp < ed)
+            records = q.order_by(ApiCallLog.timestamp).all()
+
+            headers = ["ID","User ID","呼叫時間"]
+            rows = [[r.id, r.user_id, r.timestamp.strftime("%Y-%m-%d %H:%M:%S")]
+                    for r in records]
+
+        elif rt == 'portfolio':
+            items = PortfolioItem.query.filter_by(user_id=current_user.id).all()
+            headers = ["ID","Symbol","數量"]
+            rows = [[i.id, i.symbol, i.quantity] for i in items]
+
+        elif rt == 'teams':
+            teams = Team.query.filter_by(owner_id=current_user.id).all()
+            headers = ["ID","團隊名稱","建立時間"]
+            rows = [
+                [t.id, t.name, datetime.fromtimestamp(t.created).strftime("%Y-%m-%d")]
+                for t in teams
+            ]
+
+        elif rt == 'team_members':
+            members = (TeamMember.query
+                       .join(Team, TeamMember.team_id == Team.id)
+                       .filter(Team.owner_id == current_user.id)
+                       .all())
+            headers = ["ID","Team ID","User ID","角色","加入時間"]
+            rows = [
+                [m.id, m.team_id, m.user_id, m.role,
+                 datetime.fromtimestamp(m.joined).strftime("%Y-%m-%d")]
+                for m in members
+            ]
+
+        else:
+            headers = []
+            rows = []
+        if rows:
+            sio = StringIO()
+            writer = csv.writer(sio)
+            writer.writerow(headers)
+            writer.writerows(rows)
+
+            filename = f"{rt}_{datetime.utcnow():%Y%m%d_%H%M%S}.csv"
+            tmp_path = os.path.join(TMP_DIR, filename)
+            with open(tmp_path, 'w', encoding='utf-8-sig', newline='') as f:
+                f.write(sio.getvalue())
+
+            csv_ready    = True
+            csv_filename = filename
+        else:
+            flash("找不到符合條件的資料", "warning")
+
+    return render_template(
+        'member/data_export.html',
+        form=form,
+        csv_ready=csv_ready,
+        csv_filename=csv_filename
+    )
+
+@member_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
     form = ProfileForm()
@@ -742,55 +1064,92 @@ def profile():
         user = current_user
         f = form.avatar.data
         if f:
-            ext = os.path.splitext(f.filename)[1]
-            fn  = f"avatar_{user.id}{ext}"
+            ext  = os.path.splitext(f.filename)[1]
+            fn   = f"avatar_{user.id}{ext}"
             path = os.path.join(app.static_folder, 'uploads', fn)
             os.makedirs(os.path.dirname(path), exist_ok=True)
             f.save(path)
             user.avatar_url = url_for('static', filename=f'uploads/{fn}')
         user.username = form.username.data
         user.email    = form.email.data
+        user.timezone = request.form.get("timezone", user.timezone)
+        user.language = request.form.get("language", user.language)
+
         db.session.commit()
         flash("個人檔案已更新", "success")
         return redirect(url_for('member.profile'))
-    if request.method=='GET':
+
+    if request.method == 'GET':
         form.username.data = current_user.username
         form.email.data    = current_user.email
-    return render_template('member/profile.html', form=form)
 
-@member_bp.route('/settings', methods=['GET','POST'])
-@login_required
-def settings():
-    form = SettingsForm()
-    if form.validate_on_submit():
-        user = current_user
-        user.timezone = form.timezone.data
-        user.language = form.language.data
-        db.session.commit()
-        flash("帳戶設定已儲存", "success")
-        return redirect(url_for('member.settings'))
-    if request.method=='GET':
-        form.timezone.data = current_user.timezone
-        form.language.data = current_user.language
-    return render_template('member/settings.html', form=form)
+    return render_template("member/profile.html", form=form)
 
 @member_bp.route('/security', methods=['GET','POST'])
 @login_required
 def security():
-    form = SecurityForm()
-    if form.validate_on_submit():
-        user = current_user
-        if form.submit_password.data:
-            if argon2.verify(form.old_password.data + PEPPER.decode(), user.password):
-                user.password = argon2.hash(form.new_password.data + PEPPER.decode())
-                db.session.commit()
-                flash("密碼已更新", "success")
-            else:
-                flash("舊密碼不正確", "danger")
-        if form.enable_2fa.data:
-            flash("2FA 功能尚在開發中", "info")
+    user = current_user
+
+    # 建立三個 form instance
+    pwd_form  = ChangePasswordForm()
+    mail_form = ResendEmailForm()
+    twof_form = TwoFactorForm()
+
+    # 1) 如果按下「更新密碼」
+    if pwd_form.submit_password.data and pwd_form.validate_on_submit():
+        if argon2.verify(pwd_form.old_password.data + PEPPER.decode(), user.password):
+            user.password = argon2.hash(pwd_form.new_password.data + PEPPER.decode())
+            db.session.commit()
+            flash("密碼已更新", "success")
+        else:
+            flash("舊密碼不正確", "danger")
         return redirect(url_for('member.security'))
-    return render_template('member/security.html', form=form)
+
+    # 2) 如果按下「重新寄送驗證信」
+    if mail_form.resend_email.data:
+        if not user.confirmed:
+            send_verification_email(user)
+            flash("驗證信已重新寄送", "success")
+        else:
+            flash("電子郵件已經驗證", "info")
+        return redirect(url_for('member.security'))
+
+    # 3) 如果按下「啟用 2FA」
+    if twof_form.enable_2fa.data:
+        if not user.two_factor_secret:
+            secret = pyotp.random_base32()
+            user.two_factor_secret = secret
+            db.session.commit()
+            flash("2FA 已啟用，請掃描下方 QR Code 或保存秘密鑰匙", "success")
+        else:
+            flash("2FA 已在使用中", "info")
+        return redirect(url_for('member.security'))
+
+    # 4) 如果按下「關閉 2FA」
+    if twof_form.disable_2fa.data:
+        user.two_factor_secret = None
+        db.session.commit()
+        flash("2FA 已關閉", "warning")
+        return redirect(url_for('member.security'))
+
+    # GET 時：準備 QR Code URI
+    provisioning_uri = None
+    if user.two_factor_secret:
+        totp = pyotp.TOTP(user.two_factor_secret)
+        provisioning_uri = totp.provisioning_uri(
+            name=user.email,
+            issuer_name="FinWeb"
+        )
+
+    now_ts = int(time.time())
+    return render_template(
+        'member/security.html',
+        pwd_form=pwd_form,
+        mail_form=mail_form,
+        twof_form=twof_form,
+        provisioning_uri=provisioning_uri,
+        now_ts=now_ts
+    )
 
 @member_bp.route('/subscription', methods=['GET','POST'])
 @login_required
@@ -808,72 +1167,216 @@ def subscription():
                           form=form,
                           status=current_user.subscription_status)
 
-@member_bp.route('/api-keys', methods=['GET','POST'])
+@member_bp.route('/api-keys', methods=['GET', 'POST'])
+@limiter.exempt
 @login_required
 def api_keys():
-    form = ApiKeyForm()
-    keys = ApiKey.query.filter_by(user_id=current_user.id).all()
-    if form.validate_on_submit():
-        new_key = uuid.uuid4().hex
-        ak = ApiKey(user_id=current_user.id, key=new_key)
-        db.session.add(ak)
-        db.session.commit()
-        flash("已產生新 API Key", "success")
-        return redirect(url_for('member.api_keys'))
-    return render_template('member/api_keys.html',
-                           form=form,
-                           keys=keys)
+    if request.method == "POST":
+        label = request.form.get('label','').strip()
+        if not label:
+            label = datetime.utcnow().strftime("Key-%Y%m%d-%H%M%S")
+        scopes = request.form.get('scopes', 'read')
+        exp_ts = None
+        if request.form.get('expires_at'):
+            try:
+                exp_ts = int(datetime.strptime(
+                    request.form['expires_at'], "%Y-%m-%d"
+                ).timestamp())
+            except ValueError:
+                return jsonify(ok=False, msg="日期格式錯誤"), 400
 
-@member_bp.route('/api-keys/delete/<int:key_id>', methods=['POST'])
+        inst, plain = ApiKey.create(
+            user_id=current_user.id,
+            label=label,
+            scopes=scopes,
+            expires_at=exp_ts
+        )
+        return jsonify(ok=True, key=plain), 201
+
+    keys = ApiKey.query.filter_by(user_id=current_user.id)\
+                      .order_by(ApiKey.created_at.desc()).all()
+    return render_template(
+        "member/api_keys.html",
+        keys=keys,
+        now=int(time.time())
+    )
+
+@member_bp.get('/api-keys/debug')
 @login_required
-def delete_api_key(key_id):
-    ak = ApiKey.query.get_or_404(key_id)
-    if ak.user_id != current_user.id:
+def api_keys_debug():
+    rows = ApiKey.query.filter_by(user_id=current_user.id).all()
+    return jsonify([{
+        "id": k.id, "label": k.label, "revoked": k.revoked,
+        "prefix": k.key_prefix, "scopes": k.scopes,
+        "created": k.created_at
+    } for k in rows])
+    
+@member_bp.post('/api-keys/<int:key_id>/rotate')
+@limiter.exempt
+@login_required
+def rotate_api_key(key_id):
+    k = ApiKey.query.get_or_404(key_id)
+    if k.user_id != current_user.id:
         abort(403)
-    db.session.delete(ak)
+    plain = ApiKey._plain()
+    k.key_hash   = hashlib.sha256(plain.encode()).hexdigest()
+    k.key_prefix = plain[:4] + '…'
+    k.created_at = int(time.time())
+    k.revoked    = False
     db.session.commit()
-    flash("API Key 已刪除", "success")
+    session['new_key'] = plain
+    flash("已重新產生金鑰", "success")
     return redirect(url_for('member.api_keys'))
 
-@member_bp.route('/teams', methods=['GET','POST'])
+@member_bp.post('/api-keys/delete/<int:key_id>')
+@limiter.exempt
+@login_required
+def delete_api_key(key_id):
+    k = ApiKey.query.get_or_404(key_id)
+    if k.user_id != current_user.id:
+        abort(403)
+    db.session.delete(k)
+    db.session.commit()
+    return jsonify(ok=True), 200
+
+@member_bp.post('/api-keys/<int:key_id>/rename')
+@limiter.exempt
+@login_required
+def rename_api_key(key_id):
+    k = ApiKey.query.get_or_404(key_id)
+    if k.user_id != current_user.id:
+        abort(403)
+    new_label = request.form.get('label','').strip()
+    if not new_label:
+        return jsonify(ok=False, msg="名稱不可為空"), 400
+    k.label = new_label
+    db.session.commit()
+    return jsonify(ok=True), 200
+
+@member_bp.get('/api-keys/<int:key_id>/reveal')
+@login_required
+def reveal_api_key(key_id):
+    k = ApiKey.query.get_or_404(key_id)
+    if k.user_id != current_user.id: abort(403)
+    return jsonify({"key": "僅示範，請在 session['new_key'] 顯示一次"}), 200
+
+@member_bp.route('/teams', methods=['GET', 'POST'])
 @login_required
 def teams():
     form = TeamForm()
-    teams = Team.query.filter_by(owner_id=current_user.id).all()
-    if form.validate_on_submit():
-        t = Team(name=form.name.data, owner_id=current_user.id)
-        db.session.add(t)
-        db.session.commit()
-        flash("團隊已建立", "success")
-        return redirect(url_for('member.teams'))
-    return render_template('member/teams.html',
-                           form=form,
-                           teams=teams)
+    owned = Team.query.filter_by(owner_id=current_user.id).all()
+    joined = (
+        Team.query
+        .join(TeamMember, Team.id == TeamMember.team_id)
+        .filter(
+            TeamMember.user_id == current_user.id,
+            Team.owner_id != current_user.id
+        )
+        .all()
+    )
 
-@member_bp.route('/teams/<int:team_id>', methods=['GET','POST'])
+    if form.validate_on_submit():
+        new_team = Team(name=form.name.data, owner_id=current_user.id)
+        db.session.add(new_team)
+        db.session.commit()
+        flash("✅ 團隊已建立", "success")
+        return redirect(url_for('member.teams'))
+
+    return render_template(
+        'member/teams.html',
+        form=form,
+        owned=owned,
+        joined=joined
+    )
+
+def send_team_invite_email(inviter: User, target: User, team: Team):
+    """寄發團隊邀請通知 Email."""
+    msg = Message(
+        subject=f"[FinWeb] 您已被邀請加入團隊「{team.name}」",
+        recipients=[target.email]
+    )
+    msg.body = (
+        f"親愛的 {target.username} 您好：\n\n"
+        f"使用者 {inviter.username} 已邀請您加入團隊「{team.name}」。\n"
+        f"請登入 FinWeb 後台，在「團隊管理」中查看並接受邀請。\n\n"
+        "FinWeb 團隊敬上"
+    )
+    mail.send(msg)
+
+@member_bp.route('/teams/<int:team_id>', methods=['GET', 'POST'])
 @login_required
 def team_detail(team_id):
     team = Team.query.get_or_404(team_id)
-    if team.owner_id != current_user.id:
+
+    is_owner  = (team.owner_id == current_user.id)
+    is_member = TeamMember.query.filter_by(
+        team_id=team.id, user_id=current_user.id
+    ).first() is not None
+
+    if not (is_owner or is_member):
         abort(403)
-    members = TeamMember.query.filter_by(team_id=team.id).all()
     form = InviteForm()
-    if form.validate_on_submit():
-        u = User.query.filter_by(email=form.email.data.lower()).first()
-        if u:
-            tm = TeamMember(team_id=team.id, user_id=u.id)
+
+    members = (
+        TeamMember.query
+        .filter_by(team_id=team.id)
+        .order_by(TeamMember.joined.desc())
+        .all()
+    )
+
+    if is_owner and form.validate_on_submit():
+        raw_email  = form.email.data.lower().strip()
+        email_hash = hashlib.sha256(raw_email.encode()).hexdigest()
+        target = User.query.filter_by(email_hash=email_hash).first()
+
+        if not target:
+            flash("❌ 查無此使用者", "danger")
+        elif TeamMember.query.filter_by(team_id=team.id, user_id=target.id).first():
+            flash("該使用者已在此團隊", "info")
+        else:
+            tm = TeamMember(team_id=team.id, user_id=target.id)
             db.session.add(tm)
             db.session.commit()
-            flash(f"已邀請 {u.email}", "success")
-        else:
-            flash("查無此使用者", "danger")
+            flash(f"✅ 已將 {target.email} 加入團隊！", "success")
         return redirect(url_for('member.team_detail', team_id=team.id))
-    return render_template('member/team_detail.html',
-                           team=team,
-                           members=members,
-                           form=form)
-app.register_blueprint(member_bp)
 
+    return render_template(
+        'member/team_detail.html',
+        team=team,
+        members=members,
+        form=form,
+        is_owner=is_owner
+    )
+
+@member_bp.route(
+    '/teams/<int:team_id>/members/<int:member_id>/remove',
+    methods=['POST']
+)
+@login_required
+def remove_member(team_id, member_id):
+    team = Team.query.get_or_404(team_id)
+    if team.owner_id != current_user.id:
+        abort(403)
+    tm = TeamMember.query.get_or_404(member_id)
+    db.session.delete(tm)
+    db.session.commit()
+    flash("🗑️ 已移除該成員", "warning")
+    return redirect(url_for('member.team_detail', team_id=team.id))
+@member_bp.post('/teams/<int:team_id>/delete')
+@login_required
+def delete_team(team_id):
+    team = Team.query.get_or_404(team_id)
+    if team.owner_id != current_user.id:       # 只能刪自己的團隊
+        abort(403)
+
+    # 先清除該團隊所有成員記錄
+    TeamMember.query.filter_by(team_id=team.id).delete()
+    db.session.delete(team)
+    db.session.commit()
+
+    flash("🗑️ 團隊已刪除", "warning")
+    return redirect(url_for('member.teams'))
+app.register_blueprint(member_bp, url_prefix="/member")
 @app.route("/api/market_summary")
 @login_required
 def api_market_summary():
@@ -914,7 +1417,6 @@ def api_market_summary():
         "USD/CNY":    "USDCNY=X",
         "USD/SGD":    "USDSGD=X"
     }
-
     summary = {}
     for name, ticker in symbols_map.items():
         try:
@@ -950,26 +1452,53 @@ def api_market_summary():
 
 # Gemini AI 投資助理：呼叫 gemini-1.5-flash-latest
 SYSTEM_PROMPT = """
-You are FinWeb AI Financial Assistant, a professional financial analyst and market strategist.
-• 你精通：股票、加密貨幣、市場趨勢、宏觀經濟指標與公司財報分析。
-• 回答時請：
-  – 條理分明，用段落小標題或要點列出重點
-  – 必要時給出數據、定義、參考範圍與時間點
-• 以繁體中文回答，保留專有名詞英語。
+You are FinWeb AI Assistant，一位友善又專業的金融助理，專門幫助使用者查詢各種金融資訊。
+• 精通領域：加密貨幣、股票、國際原油、指數、外匯、商品等即時數據與趨勢分析。
+• 語言風格：以繁體中文回覆，語氣親切、條理分明，保留專有名詞英語。
+• 使用方式：使用者只要下指令，就能得到回覆。例如：
+  – 查詢比特幣價格：`/price bitcoin`
+  – 查詢蘋果公司股價：`/stock AAPL`
+  – 查看原油 24 小時走勢：`/commodity oil`
+• 回覆時請：
+  1. 用一兩句歡迎語或確認語開頭（例如：「好的，正在幫您查詢…」）
+  2. 條列資訊重點
+  3. 提示下一步可以用哪些指令
+  4. 有需要再問「還有其他想查的嗎？」
 """.strip()
 
+def _strip_preamble(txt: str) -> str:
+    """
+    砍掉 Gemini 常見的自介 + 能力清單。
+    規則：
+      ① 先移除開頭『我是一個大型語言模型…』那一行
+      ② 再把緊接而來、連續出現的 **粗體條列** 或 '• - *' 開頭的清單整段移除
+      ③ 清掉多餘空白
+    """
+    txt = re.sub(r"^我是一?\S{0,20}?大型語言模型[^\n]*\n?", "", txt, flags=re.I)
+    txt = re.sub(
+        r"^(?:\s*[*\-•]?\s*(?:\*\*?.+?：\*\*?|[\-\*•].+)\n)+",
+        "",
+        txt,
+        flags=re.M
+    )
+    return txt.lstrip()
+
 def call_gemini(user_msg: str) -> str:
-    prompt = SYSTEM_PROMPT + "\n\nUser: " + user_msg
     try:
-        m = genai.GenerativeModel("gemini-1.5-flash-latest")
-        r = m.generate_content(
-            prompt,
+        model = genai.GenerativeModel(
+            "gemini-1.5-flash-latest",
+            system_instruction=SYSTEM_PROMPT,
+        )
+
+        chat = model.start_chat(history=[])
+
+        resp = chat.send_message(user_msg,
             generation_config=genai.types.GenerationConfig(
-                temperature=0.7, max_output_tokens=512,
-                top_p=0.9, top_k=50
+                temperature=0.65, top_p=0.9, max_output_tokens=512
             )
         )
-        return (r.text or "").strip() or "AI 無回應，請稍後再試。"
+        raw = (resp.text or "").strip()
+        return _strip_preamble(raw) or "抱歉，暫時無法取得回覆。"
     except Exception:
         app.logger.exception("Gemini 呼叫失敗")
         return "AI 呼叫失敗，請稍後再試。"
@@ -977,10 +1506,11 @@ def call_gemini(user_msg: str) -> str:
 @app.route("/api/chat", methods=["POST"])
 @login_required
 def api_chat():
-    user_msg = (request.json or {}).get("message","").strip()
+    user_msg = (request.json or {}).get("message", "").strip()
     if not user_msg:
         return jsonify({"reply": ""}), 400
-    return jsonify({"reply": call_gemini(user_msg)}), 200
+    reply = call_gemini(user_msg)
+    return jsonify({"reply": reply}), 200
    
 # LINE Webhook 入口
 @app.route("/callback", methods=["POST"])
@@ -1002,7 +1532,7 @@ def handle_line_message(event: MessageEvent):
         event.reply_token,
         TextSendMessage(text=reply)
     )
-
+print(app.url_map)
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
@@ -1010,3 +1540,4 @@ if __name__ == "__main__":
         datefmt="%H:%M:%S"
     )
     app.run(debug=True, threaded=True, port=5000)
+print([r.endpoint for r in app.url_map.iter_rules() if r.endpoint.startswith("member.")])

@@ -1,14 +1,99 @@
 {% extends "member/base_member.html" %}
 {% block member_content %}
-<h1 class="text-2xl font-bold mb-4">團隊管理</h1>
-<form method="POST">
-  {{ form.hidden_tag() }}
-  <div>{{ form.name.label }} {{ form.name() }}</div>
-  <button type="submit" class="btn-primary">{{ form.submit.label.text }}</button>
-</form>
-<ul class="mt-4">
-  {% for t in teams %}
-    <li><a href="{{ url_for('member.team_detail', team_id=t.id) }}">{{ t.name }}</a></li>
-  {% endfor %}
-</ul>
+<style>
+  .glass-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 0.75rem;
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    color: #edf1f5;
+  }
+  /* 強制白字與 placeholder */
+  .form-control,
+  .input {
+    color: #ffffff !important;
+  }
+  .form-control::placeholder,
+  .input::placeholder {
+    color: rgba(255,255,255,0.6) !important;
+  }
+  /* 刪除按鈕套用紅底白字 */
+  .btn-error {
+    background-color: #f43f5e;
+    color: #ffffff;
+  }
+  .btn-error:hover {
+    background-color: #e11d48;
+  }
+</style>
+
+<div class="container-fluid py-4">
+  <h1 class="display-5 text-white mb-4">團隊管理</h1>
+
+  <!-- 新增團隊表單 -->
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <div class="card glass-card p-4">
+        <h5>新增團隊</h5>
+        <form method="POST" class="row g-2">
+          {{ form.hidden_tag() }}
+          <div class="col">
+            {{ form.name(class="form-control bg-transparent", placeholder="請輸入團隊名稱") }}
+          </div>
+          <div class="col-auto">
+            {{ form.submit(class="btn btn-primary") }}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {% if owned %}
+    <h4 class="text-white">我擁有的團隊</h4>
+    <div class="row gy-3 mb-5">
+      {% for t in owned %}
+        <div class="col-md-4">
+          <div class="card glass-card p-4 d-flex flex-column h-100">
+            <h5 class="text-white">{{ t.name }}</h5>
+            <p class="text-white/60">成員：{{ t.members|length }}</p>
+            <p class="text-white/50">建立於 {{ t.created|ts2date }}</p>
+            <div class="mt-auto d-flex">
+              <a href="{{ url_for('member.team_detail', team_id=t.id) }}"
+                 class="btn btn-primary btn-sm me-2">管理</a>
+              <form method="POST"
+                    action="{{ url_for('member.delete_team', team_id=t.id) }}"
+                    onsubmit="return confirm('確定要刪除此團隊嗎？此操作無法復原！');">
+                <button type="submit" class="btn btn-error btn-sm">
+                  刪除
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if joined %}
+    <h4 class="text-white">我加入的團隊</h4>
+    <div class="row gy-3">
+      {% for t in joined %}
+        <div class="col-md-4">
+          <div class="card glass-card p-4 d-flex flex-column h-100">
+            <h5 class="text-white">{{ t.name }}</h5>
+            <p class="text-white/60">擁有者：{{ t.owner.username }}</p>
+            <a href="{{ url_for('member.team_detail', team_id=t.id) }}"
+               class="btn btn-outline-light btn-sm mt-auto">檢視</a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if not owned and not joined %}
+    <p class="text-white/60">您尚未建立或加入任何團隊。</p>
+  {% endif %}
+</div>
 {% endblock %}

@@ -1,5 +1,97 @@
 {% extends "member/base_member.html" %}
 {% block member_content %}
-<h1 class="text-2xl font-bold mb-4">稽核日誌</h1>
-<p>（這裡顯示用戶操作紀錄）</p>
+<style>
+  .glass-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 0.75rem;
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    color: #edf1f5;
+  }
+  /* 深色透明輸入框、純白文字 */
+  .glass-card .input,
+  .glass-card .form-control {
+    background: rgba(255,255,255,0.05) !important;
+    color: #fff !important;
+  }
+  .glass-card .input::placeholder,
+  .glass-card .form-control::placeholder {
+    color: rgba(255,255,255,0.6) !important;
+  }
+</style>
+
+<div class="container-fluid py-4">
+  <h1 class="text-3xl font-semibold text-white mb-4">📜 稽核日誌</h1>
+
+  <div class="card glass-card shadow-sm p-4">
+    <form method="get" class="flex flex-wrap gap-4 items-end mb-6">
+      <div>
+        <label class="block text-white mb-1">起始日期</label>
+        <input type="date"
+               name="start_date"
+               value="{{ start_date }}"
+               class="input input-sm w-40" />
+      </div>
+      <div>
+        <label class="block text-white mb-1">結束日期</label>
+        <input type="date"
+               name="end_date"
+               value="{{ end_date }}"
+               class="input input-sm w-40" />
+      </div>
+      <div>
+        <button type="submit" class="btn btn-primary">套用篩選</button>
+      </div>
+    </form>
+
+    <div class="overflow-x-auto">
+      <table class="table table-zebra w-full text-sm">
+        <thead>
+          <tr class="bg-base-300/50 text-base-content/70">
+            <th>時間</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td>{{ log.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+            <td>API 呼叫</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="2" class="text-center text-white/60 py-4">
+              無任何操作紀錄
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pagination.pages > 1 %}
+    <div class="flex justify-center items-center gap-4 mt-6">
+      {% if pagination.has_prev %}
+      <a href="{{ url_for('member.audit_logs',
+                          page=pagination.prev_num,
+                          start_date=start_date,
+                          end_date=end_date) }}"
+         class="btn btn-sm">上一頁</a>
+      {% endif %}
+      <span class="text-white/70">
+        第 {{ pagination.page }} / {{ pagination.pages }} 頁
+      </span>
+      {% if pagination.has_next %}
+      <a href="{{ url_for('member.audit_logs',
+                          page=pagination.next_num,
+                          start_date=start_date,
+                          end_date=end_date) }}"
+         class="btn btn-sm">下一頁</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

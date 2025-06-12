@@ -1,6 +1,61 @@
 {% extends "member/base_member.html" %}
 {% block member_content %}
-<h1 class="text-2xl font-bold mb-4">資料匯出</h1>
-<p>（匯出您的使用紀錄或報表）</p>
-<button class="btn-primary">下載 CSV</button>
+<div class="container-fluid py-4">
+  <h1 class="display-5 mb-4">資料匯出</h1>
+  <div class="card-glass p-4 mb-4">
+    <form method="POST">
+      {{ form.hidden_tag() }}
+      <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+          {{ form.record_type.label(class="form-label text-white") }}
+          {{ form.record_type(class="form-select") }}
+        </div>
+        <div class="col-md-3">
+          {{ form.start_date.label(class="form-label text-white") }}
+          {{ form.start_date(class="form-control", type="date") }}
+        </div>
+        <div class="col-md-3">
+          {{ form.end_date.label(class="form-label text-white") }}
+          {{ form.end_date(class="form-control", type="date") }}
+        </div>
+        <div class="col-md-2">
+          {{ form.submit_export(class="btn btn-primary w-100") }}
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {% if csv_ready %}
+    <div class="alert alert-success">
+      準備好了！請點擊下面按鈕下載。
+      <a href="{{ url_for('member.download_export', filename=csv_filename) }}"
+         class="btn btn-success btn-sm ms-3">📥 下載 {{ csv_filename }}</a>
+    </div>
+  {% endif %}
+
+  {% if not csv_ready and form.is_submitted() %}
+    <div class="alert alert-warning">找不到任何符合條件的資料。</div>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const rt = document.querySelector('select[name="record_type"]');
+  const sd = document.querySelector('input[name="start_date"]');
+  const ed = document.querySelector('input[name="end_date"]');
+  function toggleDates() {
+    if (rt.value === 'api_calls') {
+      sd.removeAttribute('disabled');
+      ed.removeAttribute('disabled');
+    } else {
+      sd.value = '';
+      ed.value = '';
+      sd.setAttribute('disabled', 'true');
+      ed.setAttribute('disabled', 'true');
+    }
+  }
+  rt.addEventListener('change', toggleDates);
+  toggleDates();
+});
+</script>
 {% endblock %}

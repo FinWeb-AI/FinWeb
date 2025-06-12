@@ -1,0 +1,68 @@
+{% extends "member/base_member.html" %}
+{% block member_content %}
+<div class="header-card mb-4">
+  <div>
+    <h2>使用者管理</h2>
+    <small>共 {{ total }} 位使用者</small>
+  </div>
+</div>
+
+<table class="table table-dark table-striped align-middle">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>帳號</th>
+      <th>密碼雜湊</th>
+      <th>電子郵件</th>
+      <th>註冊時間</th>
+      <th>已驗證</th>
+      <th>管理員</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td>{{ u.username }}</td>
+      <td style="font-family:monospace; word-break:break-all; max-width:200px;">
+        {{ u.password }}
+      </td>
+      <td>{{ u.email }}</td>
+      <td>{{ u.created|datetime }}</td>
+      <td>{{ '✅' if u.confirmed else '' }}</td>
+      <td>{{ '✅' if u.is_admin else '' }}</td>
+      <td class="d-flex gap-2">
+        <a href="{{ url_for('member.admin_edit_user', uid=u.id) }}"
+           class="btn btn-sm btn-outline-light">編輯</a>
+        <form method="POST"
+              action="{{ url_for('member.admin_delete_user', uid=u.id) }}"
+              onsubmit="return confirm('確定要刪除 {{ u.username }} 嗎？此操作不可還原！');">
+          <button type="submit" class="btn btn-sm btn-outline-danger">刪除</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<nav aria-label="Page navigation" class="mt-4">
+  <ul class="pagination justify-content-center">
+    {% if page > 1 %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page-1 }}">«</a>
+      </li>
+    {% endif %}
+    {% for p in range(1, pages+1) %}
+      <li class="page-item {% if p==page %}active{% endif %}">
+        <a class="page-link" href="?page={{ p }}">{{ p }}</a>
+      </li>
+    {% endfor %}
+    {% if page < pages %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page+1 }}">»</a>
+      </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endblock %}

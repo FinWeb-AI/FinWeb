@@ -33,11 +33,10 @@
   </style>
 </head>
 <body>
-  <!-- **注意：已移除整個 chat-header ** -->
   <div id="chat-body" class="chat-body"></div>
   <div class="chat-input">
     <input id="chat-input" type="text" placeholder="輸入問題…" autocomplete="off" />
-    <button id="chat-send">送出</button>
+    <button id="chat-send" type="button">送出</button>
   </div>
 
   <script>
@@ -47,29 +46,32 @@
 
     function append(text, who){
       const d = document.createElement('div');
-      d.className = 'msg '+who;
+      d.className = 'msg ' + who;
       d.textContent = text;
       bodyEl.appendChild(d);
       bodyEl.scrollTop = bodyEl.scrollHeight;
     }
 
-    function sendMsg(){
+    async function sendMsg(){
       const txt = inEl.value.trim();
       if(!txt) return;
-      append(txt,'user');
-      inEl.value='';
-      fetch('/api/chat',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({message:txt})
-      })
-      .then(r=>r.json())
-      .then(j=>append(j.reply,'bot'))
-      .catch(_=>append('系統錯誤，請稍後再試。','bot'));
+      append(txt, 'user');
+      inEl.value = '';
+      try {
+        const res = await fetch('{{ url_for("api_chat") }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: txt })
+        });
+        const json = await res.json();
+        append(json.reply, 'bot');
+      } catch (err) {
+        append('系統錯誤，請稍後再試。', 'bot');
+      }
     }
 
     send.onclick = sendMsg;
-    inEl.onkeydown = e=>{ if(e.key==='Enter') sendMsg(); };
+    inEl.onkeydown = e => { if (e.key === 'Enter') sendMsg(); };
   </script>
 </body>
 </html>

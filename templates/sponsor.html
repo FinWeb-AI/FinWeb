@@ -3,126 +3,110 @@
 
 {% block content %}
 <style>
-  .sponsor-hero {
-    background: linear-gradient(135deg, #203a43 0%, #0f2027 100%);
+  /* 套用首頁同樣的 glass-card 和 btn-hero */
+  .glass-card {
+    position: relative;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-br);
+    border-radius: 28px;
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(0,0,0,.40);
+    transition: .35s;
+  }
+  .glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(140deg, rgba(159,123,255,.45), rgba(106,227,255,.45), transparent 80%);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: xor;
+    padding: 1px;
+  }
+  .glass-card:hover {
+    transform: translateY(-6px);
+  }
+
+  .btn-hero {
+    border-radius: 999px;
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.25);
     color: #fff;
-    padding: 6rem 0;
-    text-align: center;
+    font-weight: 600;
+    min-width: 140px;
+    transition: .25s;
+    backdrop-filter: blur(12px);
   }
-  .tier-card {
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(8px);
-    border: none;
-    border-radius: 1rem;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-    color: #fff;
-    padding: 2rem;
-    transition: transform .3s;
+  .btn-hero:hover {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    color: #000;
+    box-shadow: 0 0 12px rgba(106,227,255,.6);
   }
-  .tier-card:hover {
-    transform: translateY(-8px);
-  }
-  .tier-name {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: .5rem;
-  }
-  .tier-price {
-    font-size: 2rem;
-    font-weight: 800;
-    margin: .5rem 0 1rem;
-  }
-  .tier-features li {
-    margin-bottom: .5rem;
-  }
-  .contact-btn {
-    background: #26a69a;
-    border: none;
-    color: #fff;
-    padding: .75rem 1.5rem;
-    border-radius: 2rem;
-    transition: background .2s;
-  }
-  .contact-btn:hover { background: #2dd7b5; }
-  .btn-patreon {
-    background: #F96854;
-    border: none;
-    color: #fff;
-    padding: .75rem 1.5rem;
-    border-radius: 2rem;
-    transition: background .2s;
-  }
-  .btn-patreon:hover { background: #E84E3F; }
 </style>
 
-<section class="sponsor-hero">
+<!-- Hero 區 -->
+<section class="hero" style="padding:4rem 0;">
   <div class="container">
-    <h1 class="animate__animated animate__fadeInDown">支持 FinWeb 的未來</h1>
-    <p class="animate__animated animate__fadeInUp animate__delay-1s">
-      您的贊助將幫助我們持續開發更多專業的金融工具與服務。
-    </p>
-    <a href="https://www.patreon.com/finweb" target="_blank" class="btn btn-patreon btn-lg mt-3 animate__animated animate__fadeInUp animate__delay-2s">
-      <i class="fab fa-patreon me-2"></i>在 Patreon 支持我們
-    </a>
+    <div class="glass-card text-center p-4 animate__animated animate__fadeInDown">
+      <h1>支持 FinWeb 的未來</h1>
+      <p class="mt-3 mb-4">您的贊助將幫助我們持續開發更多專業的金融工具與服務。</p>
+      <a href="https://www.patreon.com/finwebfin"
+         target="_blank"
+         class="btn btn-hero animate__animated animate__fadeInUp animate__delay-1s">
+        <i class="fab fa-patreon me-2"></i>在 Patreon 支持我們
+      </a>
+    </div>
   </div>
 </section>
 
-<section class="py-5" style="background-color:#16262b;">
+<!-- 贊助方案 -->
+<section class="py-5">
   <div class="container">
-    <h2 class="section-title text-center text-white mb-5">贊助方案</h2>
-    <div class="text-center mb-4">
-      <a href="https://www.patreon.com/finweb" target="_blank" class="btn btn-patreon btn-lg">
-        <i class="fab fa-patreon me-2"></i>成為 Patreon 贊助者
-      </a>
-    </div>
-    <div class="row g-4">
-      <!-- Bronze -->
-      <div class="col-md-4">
-        <div class="tier-card h-100">
-          <div class="tier-name">Bronze 青銅</div>
-          <div class="tier-price">$50 / 月</div>
-          <ul class="tier-features list-unstyled">
-            <li>★ 平台感謝致謝</li>
-            <li>★ 每月新功能預告</li>
-            <li>★ 專屬社群徽章</li>
+    <h2 class="text-center mb-5 text-white animate__animated animate__fadeInUp">贊助方案</h2>
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+      {% macro tier(name, price, features, delay) %}
+      <div class="col animate__animated animate__fadeInUp {{ delay }}">
+        <div class="glass-card p-4 h-100 text-center">
+          <div class="tier-name text-white fw-bold">{{ name }}</div>
+          <div class="tier-price text-white display-6">{{ price }}</div>
+          <ul class="list-unstyled text-white-50 mb-3">
+            {% for feat in features %}
+              <li>★ {{ feat }}</li>
+            {% endfor %}
           </ul>
-          <a href="https://www.patreon.com/finweb" target="_blank" class="btn btn-patreon btn-sm mt-3">Patreon 青銅計劃</a>
+          <a href="https://www.patreon.com/finwebfin"
+             target="_blank"
+             class="btn btn-hero btn-sm">
+            Patreon {{ name }} 計劃
+          </a>
         </div>
       </div>
-      <!-- Silver -->
-      <div class="col-md-4">
-        <div class="tier-card h-100">
-          <div class="tier-name">Silver 銀牌</div>
-          <div class="tier-price">$150 / 月</div>
-          <ul class="tier-features list-unstyled">
-            <li>★ Bronze 所有權益</li>
-            <li>★ 專屬每月財經報告</li>
-            <li>★ 線上 Q&A 優先權</li>
-          </ul>
-          <a href="https://www.patreon.com/finweb" target="_blank" class="btn btn-patreon btn-sm mt-3">Patreon 銀牌計劃</a>
-        </div>
-      </div>
-      <!-- Gold -->
-      <div class="col-md-4">
-        <div class="tier-card h-100">
-          <div class="tier-name">Gold 黃金</div>
-          <div class="tier-price">$300 / 月</div>
-          <ul class="tier-features list-unstyled">
-            <li>★ Silver 所有權益</li>
-            <li>★ 一對一專屬諮詢</li>
-            <li>★ API 高優先限額</li>
-          </ul>
-          <a href="https://www.patreon.com/finweb" target="_blank" class="btn btn-patreon btn-sm mt-3">Patreon 黃金計劃</a>
-        </div>
-      </div>
+      {% endmacro %}
+
+      {{ tier('Bronze 青銅', '$10 / 月',
+             ['列入官方贊助名單', '新功能搶先看(Sliver解鎖一個月後)'],
+             'animate__delay-1s') }}
+      {{ tier('Silver 銀牌', '$20 / 月',
+             ['Bronze 所有權益', '新功能搶先看(Gold解鎖一個月後)', 'API 優先配額'],
+             'animate__delay-2s') }}
+      {{ tier('Gold 黃金', '$50 / 月',
+             ['Silver 所有權益', '新功能搶先看(Beta)', 'API 高優先限額'],
+             'animate__delay-3s') }}
     </div>
 
     <div class="text-center mt-5">
-      <p class="text-white-50">
-        若有其他合作意向，歡迎透過 finwebfinance2025@gmail.com 與我們聯繫。
-      </p>
-      <a href="mailto:finwebfinance2025@gmail.com" class="contact-btn">聯絡我們</a>
+      <p class="text-white-50 mb-3">若有其他合作意向，歡迎透過 finwebfinance2025@gmail.com 與我們聯繫。</p>
+      <a href="mailto:finwebfinance2025@gmail.com"
+         class="btn btn-hero animate__animated animate__fadeInUp animate__delay-4s">
+        聯絡我們
+      </a>
     </div>
   </div>
 </section>
 {% endblock %}
+
+{% block scripts %}{{ super() }}{% endblock %}
