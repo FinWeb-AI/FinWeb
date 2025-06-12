@@ -4,7 +4,7 @@ import uuid
 import logging
 import configparser
 import requests
-import sys
+import sys, logging  
 sys.modules['app'] = sys.modules[__name__]
 import time
 import re
@@ -14,6 +14,7 @@ from sqlalchemy.orm import synonym
 from pathlib import Path
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet,InvalidToken
+from requests_oauthlib import OAuth2Session
 import base64
 import qrcode
 import tempfile
@@ -23,7 +24,7 @@ FERNET_KEY = "9gfBuQFUmVv1_iGpUk3X8N3zPBsGPv0TQlf60OjYH9U="
 f = Fernet(FERNET_KEY.encode())
 from flask import (
     Flask, render_template, request, redirect,
-    url_for, jsonify, flash, abort, session, Blueprint,send_file,make_response
+    url_for, jsonify, flash, abort, session, Blueprint, send_file,make_response,current_app
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -138,7 +139,7 @@ LINE_TOKEN  = CFG["LINE"]["CHANNEL_ACCESS_TOKEN"]
 LINE_SECRET = CFG["LINE"]["CHANNEL_SECRET"]
 line_api     = LineBotApi(LINE_TOKEN)
 line_handler = WebhookHandler(LINE_SECRET)
-
+_model = genai.GenerativeModel("gemini-1.5-flash-latest")
 @login_mgr.unauthorized_handler
 def _unauth():
     # 如果要進 /assistant，就導到登入頁
@@ -418,6 +419,7 @@ def send_verification_email(user: User):
 # 阻擋可疑 User-Agent
 @app.before_request
 def block_bad_ua():
+    print(f"→ {request.method} {request.path}", file=sys.stderr, flush=True)
     ua = request.headers.get("User-Agent","").lower()
     if re.search(r"curl|python-requests|scrapy", ua):
         abort(403)
@@ -1451,66 +1453,42 @@ def api_market_summary():
     return jsonify(summary)
 
 # Gemini AI 投資助理：呼叫 gemini-1.5-flash-latest
-SYSTEM_PROMPT = """
-You are FinWeb AI Assistant，一位友善又專業的金融助理，專門幫助使用者查詢各種金融資訊。
-• 精通領域：加密貨幣、股票、國際原油、指數、外匯、商品等即時數據與趨勢分析。
-• 語言風格：以繁體中文回覆，語氣親切、條理分明，保留專有名詞英語。
-• 使用方式：使用者只要下指令，就能得到回覆。例如：
-  – 查詢比特幣價格：`/price bitcoin`
-  – 查詢蘋果公司股價：`/stock AAPL`
-  – 查看原油 24 小時走勢：`/commodity oil`
-• 回覆時請：
-  1. 用一兩句歡迎語或確認語開頭（例如：「好的，正在幫您查詢…」）
-  2. 條列資訊重點
-  3. 提示下一步可以用哪些指令
-  4. 有需要再問「還有其他想查的嗎？」
-""".strip()
-
-def _strip_preamble(txt: str) -> str:
-    """
-    砍掉 Gemini 常見的自介 + 能力清單。
-    規則：
-      ① 先移除開頭『我是一個大型語言模型…』那一行
-      ② 再把緊接而來、連續出現的 **粗體條列** 或 '• - *' 開頭的清單整段移除
-      ③ 清掉多餘空白
-    """
-    txt = re.sub(r"^我是一?\S{0,20}?大型語言模型[^\n]*\n?", "", txt, flags=re.I)
-    txt = re.sub(
-        r"^(?:\s*[*\-•]?\s*(?:\*\*?.+?：\*\*?|[\-\*•].+)\n)+",
-        "",
-        txt,
-        flags=re.M
-    )
-    return txt.lstrip()
+SYSTEM_PROMPT = (
+    "你是 FinWeb AI Assistant，一位友善又專業的金融顧問，"
+    "擅長加密貨幣、股票、原油、外匯等資訊。"
+    "所有回覆使用繁體中文，且結尾要附一句「還需要其他協助嗎？」"
+)
 
 def call_gemini(user_msg: str) -> str:
+    # 直接用 dict 而不是 typed object
+    messages = [
+        {"author": "system", "content": SYSTEM_PROMPT},
+        {"author": "user",   "content": user_msg},
+    ]
+    response = genai.chat.create(
+        model="gemini-1.5-flash-latest",
+        messages=messages,
+        temperature=0.65,
+        top_p=0.9,
+        max_output_tokens=512,
+    )
+    # 取第一個 choice 的內容
+    return response.choices[0].message.content.strip()
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
     try:
-        model = genai.GenerativeModel(
-            "gemini-1.5-flash-latest",
-            system_instruction=SYSTEM_PROMPT,
-        )
+        app.logger.info("▶ 收到 /api/chat 請求，payload: %r", request.get_data())
+        data = request.get_json()
+        user_msg = data and data.get('message')
+        if not user_msg:
+            return jsonify({"error": "缺少 'message' 欄位"}), 400
 
-        chat = model.start_chat(history=[])
-
-        resp = chat.send_message(user_msg,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.65, top_p=0.9, max_output_tokens=512
-            )
-        )
-        raw = (resp.text or "").strip()
-        return _strip_preamble(raw) or "抱歉，暫時無法取得回覆。"
-    except Exception:
-        app.logger.exception("Gemini 呼叫失敗")
-        return "AI 呼叫失敗，請稍後再試。"
-
-@app.route("/api/chat", methods=["POST"])
-@login_required
-def api_chat():
-    user_msg = (request.json or {}).get("message", "").strip()
-    if not user_msg:
-        return jsonify({"reply": ""}), 400
-    reply = call_gemini(user_msg)
-    return jsonify({"reply": reply}), 200
+        reply_text = call_gemini(user_msg)
+        return jsonify({"reply": reply_text})
+    except Exception as e:
+        app.logger.exception("呼叫 /api/chat 發生錯誤")
+        return jsonify({"error": str(e)}), 500
    
 # LINE Webhook 入口
 @app.route("/callback", methods=["POST"])
@@ -1532,12 +1510,15 @@ def handle_line_message(event: MessageEvent):
         event.reply_token,
         TextSendMessage(text=reply)
     )
+
 print(app.url_map)
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
-        datefmt="%H:%M:%S"
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
-    app.run(debug=True, threaded=True, port=5000)
+    app.logger.handlers = logging.getLogger().handlers
+    app.logger.setLevel(logging.INFO)
+    app.run(debug=True, threaded=True, use_reloader=False,port=5000)
 print([r.endpoint for r in app.url_map.iter_rules() if r.endpoint.startswith("member.")])

@@ -12,8 +12,21 @@
     </button>
   </div>
 </div>
+
 <div id="mv-container"></div>
-<div id="news-sidebar"></div>
+
+<div id="news-sidebar">
+  <!-- 收合/展開按鈕 -->
+  <div id="sidebar-controls">
+    <button id="sidebar-collapse" title="收合"><i class="fas fa-chevron-right"></i></button>
+    <button id="sidebar-expand"   title="展開"><i class="fas fa-chevron-left"></i></button>
+  </div>
+  <!-- 可滾動的內容 -->
+  <div id="sidebar-content">
+    <!-- JavaScript 會動態塞入 .item 列表 -->
+  </div>
+</div>
+
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index:10000">
   <div id="toast-loading" class="toast align-items-center text-white bg-dark border-0" role="alert"
        aria-live="assertive" aria-atomic="true">
@@ -27,55 +40,176 @@
 
 {% block scripts %}
 <style>
-  #mv-container{position:fixed;inset:70px 0 0 0;background:#151520;overflow:hidden;z-index:0;}
-  #mv-container canvas,#mv-container>div{position:absolute;top:0;left:0;z-index:1;}
-  #news-sidebar{position:fixed;top:90px;right:0;width:260px;height:calc(100% - 100px);
-    background:rgba(0,0,0,.6);color:#fff;overflow-y:auto;padding:10px;z-index:10001;font-size:14px;}
-  #news-sidebar .item{margin-bottom:6px;padding:6px 8px;border-radius:4px;cursor:pointer;}
-  #news-sidebar .item:hover{background:rgba(255,255,255,.1);}
-  .news-card{width:280px;display:flex;flex-direction:column;background:#000;color:#fff;
-    border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.6);overflow:hidden;cursor:pointer;}
-  .news-card img.news-img{width:100%;height:140px;object-fit:cover;}
-  .news-card .overlay{backdrop-filter:blur(4px);background:rgba(0,0,0,.55);padding:10px;border-radius:0 0 8px 8px;}
-  .news-card .overlay h6{font-size:16px;margin:0 0 .3rem;}
-  .news-card .overlay small{font-size:12px;color:#ccc;}
+  /* 3D 畫布 */
+  #mv-container {
+    position: fixed; inset:70px 0 0 0;
+    background:#151520; overflow:hidden; z-index:0;
+  }
+  #mv-container canvas,
+  #mv-container > div {
+    position:absolute; top:0; left:0; z-index:1;
+  }
+
+  /* 新聞側欄 */
+  #news-sidebar {
+    position: fixed; top:90px; right:0;
+    width:260px; height:calc(100% - 100px);
+    background:rgba(0,0,0,.6); color:#fff;
+    padding:10px; z-index:10001;
+    font-size:14px; transition: width .3s ease;
+  }
+  /* 收合寬度只留按鈕 */
+  #news-sidebar.collapsed {
+    width:32px;
+  }
+
+  /* 收合/展開按鈕 */
+  #sidebar-controls {
+    position: absolute;
+    top:50%; transform:translateY(-50%);
+    left:0;
+    display:flex; flex-direction:column; gap:4px;
+    z-index:10002;
+  }
+  /* 收合時把按鈕推到外面 */
+  #news-sidebar.collapsed #sidebar-controls {
+    left:-32px;
+  }
+  #sidebar-controls button {
+    width:28px; height:28px;
+    background:rgba(255,255,255,.1); border:none;
+    border-radius:4px; color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  #sidebar-controls button:hover {
+    background:rgba(255,255,255,.2);
+  }
+
+  /* 內容區可滾動 */
+  #sidebar-content {
+    height: calc(100% - 20px);   /* 扣掉上下 padding 各 10px */
+    overflow-y: auto;
+    margin-top:8px;
+    transition: opacity .3s ease;
+  }
+  #news-sidebar.collapsed #sidebar-content {
+    opacity:0; pointer-events:none;
+  }
+
+  /* 列表項目 */
+  #sidebar-content .item {
+    margin-bottom:6px; padding:6px 8px;
+    border-radius:4px; cursor:pointer;
+  }
+  #sidebar-content .item:hover {
+    background:rgba(255,255,255,.1);
+  }
+
+  /* CSS3D 卡片 */
+  .news-card {
+    width:280px; display:flex; flex-direction:column;
+    background:#000; color:#fff; border-radius:8px;
+    box-shadow:0 4px 14px rgba(0,0,0,.6);
+    overflow:hidden; cursor:pointer;
+  }
+  .news-card img.news-img {
+    width:100%; height:140px; object-fit:cover;
+  }
+  .news-card .overlay {
+    backdrop-filter:blur(4px);
+    background:rgba(0,0,0,.55);
+    padding:10px; border-radius:0 0 8px 8px;
+  }
+  .news-card .overlay h6 {
+    font-size:16px; margin:0 0 .3rem;
+  }
+  .news-card .overlay small {
+    font-size:12px; color:#ccc;
+  }
 </style>
 
 <script type="module">
 import * as THREE from "three";
-import { CSS3DRenderer,CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
+import { CSS3DRenderer, CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
 import { OrbitControls }               from "three/examples/jsm/controls/OrbitControls.js";
 import { DragControls }                from "three/examples/jsm/controls/DragControls.js";
 import TWEEN                           from "https://unpkg.com/@tweenjs/tween.js@18.6.4/dist/tween.esm.js";
 
-const input   = document.getElementById("mv-input");
-const modeBtn = document.getElementById("mode-btn");
-const toast   = new bootstrap.Toast(document.getElementById("toast-loading"));
-const wrap    = document.getElementById("mv-container");
-const sidebar = document.getElementById("news-sidebar");
+// UI 元件
+const input       = document.getElementById("mv-input");
+const modeBtn     = document.getElementById("mode-btn");
+const toast       = new bootstrap.Toast(document.getElementById("toast-loading"));
+const wrap        = document.getElementById("mv-container");
+const sidebar     = document.getElementById("news-sidebar");
+const sbContent   = document.getElementById("sidebar-content");
+const btnCollapse = document.getElementById("sidebar-collapse");
+const btnExpand   = document.getElementById("sidebar-expand");
 
+// 綁定收合/展開
+if (btnCollapse && btnExpand) {
+  btnCollapse.addEventListener("click", ()=> sidebar.classList.add("collapsed"));
+  btnExpand.addEventListener("click",   ()=> sidebar.classList.remove("collapsed"));
+}
+
+// Three.js 初始化
 let W = wrap.clientWidth, H = wrap.clientHeight;
 const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, W/H, 1, 12000);
-camera.position.set(0,500,3000);
+camera.position.set(0, 500, 3000);
 
 const gl = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-gl.setSize(W,H); wrap.appendChild(gl.domElement);
-gl.domElement.style.pointerEvents="none"; gl.domElement.style.zIndex="0";
+gl.setSize(W, H); wrap.appendChild(gl.domElement);
+gl.domElement.style.pointerEvents = "none";
 
-const css = new CSS3DRenderer();
-css.setSize(W,H); css.domElement.style.position="absolute"; css.domElement.style.inset="0";
-wrap.appendChild(css.domElement);
-css.domElement.style.pointerEvents="auto"; css.domElement.style.zIndex="1";
+const cssRenderer = new CSS3DRenderer();
+cssRenderer.setSize(W, H);
+cssRenderer.domElement.style.position = "absolute";
+cssRenderer.domElement.style.inset    = "0";
+wrap.appendChild(cssRenderer.domElement);
 
-const controls = new OrbitControls(camera, css.domElement);
-controls.enableDamping=true; controls.dampingFactor=.1;
-controls.enablePan=false;    controls.minDistance=1; controls.maxDistance=Infinity;
+const controls = new OrbitControls(camera, cssRenderer.domElement);
+controls.enableDamping   = true;
+controls.dampingFactor   = .1;
+controls.enablePan       = false;
+controls.minDistance     = 1;
+controls.maxDistance     = Infinity;
 
-let isAuto = true;
-let dragCtrl = null;
+// 模式切換
+let isAuto = true, dragCtrl = null;
 const panels = [];
 
+function updateMode(){
+  if (isAuto) {
+    modeBtn.innerText   = "自動模式";
+    controls.enabled    = false;
+    controls.enableZoom = false;
+    cameraFly();
+  } else {
+    modeBtn.innerText   = "手動模式";
+    controls.enabled    = true;
+    controls.enableZoom = true;
+  }
+}
+modeBtn.addEventListener("click", ()=>{
+  isAuto = !isAuto;
+  if (!isAuto) TWEEN.removeAll();
+  updateMode();
+});
+controls.addEventListener("start", ()=>{
+  isAuto = false;
+  updateMode();
+});
+
+// 窗口縮放
+window.addEventListener("resize", ()=>{
+  W = wrap.clientWidth; H = wrap.clientHeight;
+  camera.aspect = W/H; camera.updateProjectionMatrix();
+  gl.setSize(W, H);
+  cssRenderer.setSize(W, H);
+});
+
+// 節點與連線設定（同原本程式）……
 const NODE = 300;
 const nodes = [];
 for(let i=0;i<NODE;i++){
@@ -89,102 +223,78 @@ const linkIdx = [], deg=new Array(NODE).fill(0);
 while(linkIdx.length/2 < NODE*10){
   const a=Math.floor(Math.random()*NODE), b=Math.floor(Math.random()*NODE);
   if(a!==b && nodes[a].distanceTo(nodes[b])<3000){
-    linkIdx.push(a,b);
-    deg[a]++; deg[b]++;
+    linkIdx.push(a,b); deg[a]++; deg[b]++;
   }
 }
 const links=[];
 for(let i=0;i<linkIdx.length;i+=2){
-  const a=nodes[linkIdx[i]], b=nodes[linkIdx[i+1]];
-  links.push(a.x,a.y,a.z, b.x,b.y,b.z);
+  const A=nodes[linkIdx[i]], B=nodes[linkIdx[i+1]];
+  links.push(A.x,A.y,A.z, B.x,B.y,B.z);
 }
-
-const baseGroup = new THREE.Group();
+const baseGroup=new THREE.Group();
 (() => {
-  const geo = new THREE.BufferGeometry(), cnt=10000;
-  const pos = new Float32Array(cnt*3);
+  const geo=new THREE.BufferGeometry(), cnt=10000;
+  const pos=new Float32Array(cnt*3);
   for(let i=0;i<pos.length;i++) pos[i]=(Math.random()-.5)*10000;
   geo.setAttribute("position", new THREE.BufferAttribute(pos,3));
   baseGroup.add(new THREE.Points(geo,new THREE.PointsMaterial({color:0xffffff,size:.9})));
 })();
 {
-  const lg = new THREE.BufferGeometry();
+  const lg=new THREE.BufferGeometry();
   lg.setAttribute("position", new THREE.Float32BufferAttribute(links,3));
   baseGroup.add(new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0xffffff,opacity:.15,transparent:true})));
   baseGroup.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(nodes),new THREE.PointsMaterial({color:0xffffff,size:4})));
 }
-const tileSize = 9000;
-const tileGroups=[];
+const tileSize=9000, tileGroups=[];
 [-1,0,1].forEach(x=>[-1,0,1].forEach(z=>{
-  const g = (x===0&&z===0)? baseGroup : baseGroup.clone();
+  const g=(x===0&&z===0)? baseGroup: baseGroup.clone();
   scene.add(g);
   tileGroups.push({g,offset:new THREE.Vector3(x*tileSize,0,z*tileSize)});
 }));
+const sorted=[...Array(NODE).keys()].sort((a,b)=>deg[b]-deg[a]);
+const topNodes=sorted.slice(0, Math.min(100,NODE));
 
-const sorted = [...Array(NODE).keys()].sort((a,b)=>deg[b]-deg[a]);
-const topNodes = sorted.slice(0, Math.min(100, NODE));
-
-function updateMode(){
-  if(isAuto){
-    modeBtn.innerText="自動模式";
-    controls.enabled=false; controls.enableZoom=false;
-    cameraFly();
-  }else{
-    modeBtn.innerText="手動模式";
-    controls.enabled=true; controls.enableZoom=true;
-  }
-}
-modeBtn.addEventListener("click",()=>{
-  isAuto=!isAuto; if(!isAuto) TWEEN.removeAll(); updateMode();
-});
-controls.addEventListener("start",()=>{
-  isAuto=false; updateMode();
-});
-window.addEventListener("resize",()=>{
-  W=wrap.clientWidth;H=wrap.clientHeight;
-  camera.aspect=W/H;camera.updateProjectionMatrix();
-  gl.setSize(W,H);css.setSize(W,H);
-});
-
+// 清除舊面板
 function clearPanels(){
   panels.forEach(o=>scene.remove(o));
-  panels.length=0; sidebar.innerHTML="";
-  if(dragCtrl){ dragCtrl.dispose(); dragCtrl=null; }
+  panels.length=0;
+  sbContent.innerHTML="";
+  if (dragCtrl){ dragCtrl.dispose(); dragCtrl=null; }
 }
 
+// 建立新聞卡片
 function makeCard(d,i){
   const a=document.createElement("a");
-  a.href=d.link||"#";a.target="_blank";a.rel="noopener noreferrer";
+  a.href=d.link||"#"; a.target="_blank"; a.rel="noopener noreferrer";
   a.className="news-card";
   a.innerHTML=(d.img?`<img src="${d.img}" class="news-img">`:"")
-    +`<div class="overlay"><h6>${d.title}</h6><small>${d.published}</small></div>`;
+              +`<div class="overlay"><h6>${d.title}</h6><small>${d.published}</small></div>`;
   a.addEventListener("pointerdown",e=>e.stopPropagation());
   const obj=new CSS3DObject(a);
 
-  const ni = topNodes[i % topNodes.length];
+  const ni=topNodes[i%topNodes.length];
   obj.position.copy(nodes[ni].clone().add(new THREE.Vector3(
     (Math.random()-.5)*200,
     (Math.random()-.5)*200,
     (Math.random()-.5)*200
   )));
+  scene.add(obj); panels.push(obj);
 
-  scene.add(obj);
-  panels.push(obj);
-
-  const side=document.createElement("div");
-  side.className="item"; side.innerText=d.title;
-  side.onclick=()=>flyTo(panels.indexOf(obj));
-  sidebar.appendChild(side);
+  const div=document.createElement("div");
+  div.className="item"; div.innerText=d.title;
+  div.onclick=()=>flyTo(panels.indexOf(obj));
+  sbContent.appendChild(div);
 }
 
+// 載入新聞
 async function loadNews(sym){
   toast.show(); clearPanels();
   try{
     const res=await fetch(`/api/metaverse_feed?symbol=${encodeURIComponent(sym)}`);
     const data=await res.json();
-    if(data.error){ alert(data.error);return; }
+    if(data.error){ alert(data.error); return; }
     data.forEach((d,i)=>makeCard(d,i));
-    dragCtrl=new DragControls(panels,camera,css.domElement);
+    dragCtrl=new DragControls(panels,camera,cssRenderer.domElement);
     dragCtrl.addEventListener("dragstart",()=>controls.enabled=false);
     dragCtrl.addEventListener("dragend",()=>controls.enabled=true);
     if(isAuto){ TWEEN.removeAll(); cameraFly(); }
@@ -192,11 +302,9 @@ async function loadNews(sym){
     console.error(e); alert("API 錯誤");
   }finally{ toast.hide(); }
 }
-window.searchNews=()=>{
-  const v=input.value.trim();
-  v? loadNews(v):alert("請輸入標的");
-};
+window.searchNews=()=>{ const v=input.value.trim(); v?loadNews(v):alert("請輸入標的"); };
 
+// 語音搜尋
 (()=>{
   const mic=document.getElementById("voice-btn");
   if("SpeechRecognition"in window||"webkitSpeechRecognition"in window){
@@ -207,6 +315,7 @@ window.searchNews=()=>{
   }else mic.style.display="none";
 })();
 
+// 自動飛行
 function cameraFly(){
   if(!isAuto||panels.length===0)return;
   const idx=Math.floor(Math.random()*panels.length),
@@ -219,16 +328,16 @@ function cameraFly(){
     .easing(TWEEN.Easing.Sinusoidal.InOut).onComplete(cameraFly).start();
 }
 
+// 列表飛過去
 function flyTo(idx){
   isAuto=false; updateMode();
   const o=panels[idx]; if(!o)return;
   const tp=o.position.clone(), np=tp.clone().add(new THREE.Vector3(0,200,800));
-  new TWEEN.Tween(camera.position).to({x:np.x,y:np.y,z:np.z},2000)
-    .easing(TWEEN.Easing.Cubic.Out).start();
-  new TWEEN.Tween(controls.target).to({x:tp.x,y:tp.y,z:tp.z},2000)
-    .easing(TWEEN.Easing.Cubic.Out).start();
+  new TWEEN.Tween(camera.position).to({x:np.x,y:np.y,z:np.z},2000).easing(TWEEN.Easing.Cubic.Out).start();
+  new TWEEN.Tween(controls.target).to({x:tp.x,y:tp.y,z:tp.z},2000).easing(TWEEN.Easing.Cubic.Out).start();
 }
 
+// 主動畫迴圈
 (function animate(t){
   requestAnimationFrame(animate);
   tileGroups.forEach(({g,offset})=>{
@@ -239,7 +348,8 @@ function flyTo(idx){
     );
   });
   controls.update(); TWEEN.update(t);
-  gl.render(scene,camera); css.render(scene,camera);
+  gl.render(scene,camera);
+  cssRenderer.render(scene,camera);
 })();
 </script>
 {% endblock %}
