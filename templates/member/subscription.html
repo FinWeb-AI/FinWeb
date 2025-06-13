@@ -1,10 +1,55 @@
 {% extends "member/base_member.html" %}
+
 {% block member_content %}
-<h1 class="text-2xl font-bold mb-4">帳單與訂閱</h1>
-<form method="POST">
+<div class="mb-8">
+  <h1 class="text-3xl font-bold text-cyan-200">帳單與訂閱</h1>
+  <p class="text-sm text-gray-400">
+    管理您的訂閱方案、查看帳單紀錄，並在需要時升/降級。
+  </p>
+</div>
+
+<form method="POST" class="mb-10 max-w-xs">
   {{ form.hidden_tag() }}
-  <div>{{ form.membership_level.label }} {{ form.membership_level() }}</div>
-  <button type="submit" class="btn-primary">{{ form.submit.label.text }}</button>
+  <label class="block text-sm mb-1 text-gray-300">{{ form.membership_level.label }}</label>
+  {{ form.membership_level(class="w-full mb-4 bg-white text-black p-2 rounded-lg") }}
+  <button type="submit"
+          class="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-black">
+      更新方案
+  </button>
 </form>
-<p class="mt-3">目前狀態：<strong>{{ status }}</strong></p>
+
+<p class="mb-12 text-gray-400">
+  目前狀態：
+  <strong class="text-white">{{ status or "inactive" }}</strong>
+</p>
+
+<h2 class="text-2xl font-semibold text-cyan-200 mb-4">帳單紀錄</h2>
+{% if billing_history %}
+<div class="overflow-x-auto rounded-xl shadow">
+  <table class="min-w-full text-sm bg-slate-800/60 backdrop-blur">
+    <thead class="bg-slate-700 text-gray-200">
+      <tr>
+        <th class="px-4 py-2 text-left">日期</th>
+        <th class="px-4 py-2 text-left">項目</th>
+        <th class="px-4 py-2 text-right">金額 (USD)</th>
+        <th class="px-4 py-2 text-left">狀態</th>
+        <th class="px-4 py-2 text-left">發票</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in billing_history %}
+      <tr class="border-b border-slate-700/60 hover:bg-slate-700/30">
+        <td class="px-4 py-2 whitespace-nowrap">{{ row.date.strftime("%Y-%m-%d") }}</td>
+        <td class="px-4 py-2">{{ row.item }}</td>
+        <td class="px-4 py-2 text-right">{{ "%.2f"|format(row.amount) }}</td>
+        <td class="px-4 py-2">{{ row.status }}</td>
+        <td class="px-4 py-2">{{ row.invoice }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-gray-400">尚無帳單紀錄。</p>
+{% endif %}
 {% endblock %}

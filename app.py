@@ -42,8 +42,10 @@ from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
 from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from passlib.hash import argon2
 from sqlalchemy import text, ForeignKey,func
+
 import yfinance as yf
 import google.generativeai as genai
 from linebot import LineBotApi, WebhookHandler
@@ -84,6 +86,7 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("SECRET_KEY", os.urandom(32).hex())
 app.register_blueprint(stock_bp, url_prefix="/stocks")
 app.register_blueprint(trend_bp, url_prefix="/analysis")
+socketio = SocketIO(app, cors_allowed_origins="*") 
 # 強制 HTTPS，允許所有 CSP
 Talisman(app, force_https=True, content_security_policy=None)
 
@@ -214,9 +217,6 @@ class ApiKey(db.Model):
         )
         db.session.add(inst); db.session.commit()
 
-        # ★ DEBUG
-        app.logger.info(f"[ApiKey.create] uid={user_id}, id={inst.id}, label={inst.label}")
-
         return inst, plain
 # WTForms：註冊與登入表單
 class _F(FlaskForm):
@@ -273,7 +273,16 @@ class Notification(db.Model):
     link        = db.Column(db.String(300))
     created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     is_read     = db.Column(db.Boolean, default=False, nullable=False)    
-    
+
+class ChatMessage(db.Model):
+    __tablename__ = 'chat_message'
+    id       = db.Column(db.Integer, primary_key=True)
+    team_id  = db.Column(db.Integer, db.ForeignKey("team.id"), nullable=False)
+    user_id  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    content  = db.Column(db.Text, nullable=False)
+    ts       = db.Column(db.Integer, default=lambda: int(time.time()))
+    user     = db.relationship("User", lazy="joined")
+        
 with app.app_context():
     db.create_all()
     col_defs = {
@@ -298,7 +307,6 @@ with app.app_context():
         if col not in existing:
             db.session.execute(text(f"ALTER TABLE user ADD COLUMN {col} {ddl}"))
             db.session.commit()
-            app.logger.info(f"ALTER TABLE user ADD COLUMN {col} ({ddl})")
 
 app.register_blueprint(sent_bp,   url_prefix="/")
 app.register_blueprint(cv_bp,     url_prefix="/")
@@ -419,7 +427,6 @@ def send_verification_email(user: User):
 # 阻擋可疑 User-Agent
 @app.before_request
 def block_bad_ua():
-    print(f"→ {request.method} {request.path}", file=sys.stderr, flush=True)
     ua = request.headers.get("User-Agent","").lower()
     if re.search(r"curl|python-requests|scrapy", ua):
         abort(403)
@@ -877,6 +884,12 @@ def dashboard():
         asset_trend    = asset_trend,
         portfolio_dist = portfolio_dist
     )
+    
+@app.template_filter("tsfmt")
+def tsfmt(ts: int | None, fmt: str = "%Y-%m-%d %H:%M:%S"):
+    """timestamp → 指定格式字串；ts 為 None 回傳 '-'"""
+    return datetime.fromtimestamp(ts).strftime(fmt) if ts else "-"
+
 @member_bp.route('/2fa/qrcode')
 @login_required
 def two_factor_qr():
@@ -1153,21 +1166,40 @@ def security():
         now_ts=now_ts
     )
 
-@member_bp.route('/subscription', methods=['GET','POST'])
+@member_bp.route("/subscription", methods=["GET", "POST"])
 @login_required
 def subscription():
+    """
+    訂閱 / 帳單頁（簡化版，不再使用全域 PLANS）。
+    僅靠 WTForms 的 <select> 來升／降級，並顯示帳單紀錄。
+    """
+    user = current_user
     form = SubscriptionForm()
+
     if form.validate_on_submit():
-        current_user.membership_level = form.membership_level.data
-        current_user.subscription_status = 'active'
+        chosen = form.membership_level.data
+        user.membership_level    = chosen
+        user.subscription_status = "inactive" if chosen == "free" else "active"
         db.session.commit()
-        flash("訂閱方案已更新", "success")
-        return redirect(url_for('member.subscription'))
-    if request.method=='GET':
-        form.membership_level.data = current_user.membership_level
-    return render_template('member/subscription.html',
-                          form=form,
-                          status=current_user.subscription_status)
+        flash("✅ 方案已更新！", "success")
+        return redirect(url_for("member.subscription"))
+
+    billing_history = [
+        {"date": datetime(2025, 5, 10), "item": "進階方案（月費）",
+         "amount": 9.9, "status": "已付款", "invoice": "#INV-20250510-001"},
+        {"date": datetime(2025, 4, 10), "item": "進階方案（月費）",
+         "amount": 9.9, "status": "已付款", "invoice": "#INV-20250410-001"},
+    ]
+
+    if request.method == "GET":
+        form.membership_level.data = user.membership_level
+
+    return render_template(
+        "member/subscription.html",
+        form=form,
+        status=user.subscription_status,
+        billing_history=billing_history,
+    )
 
 @member_bp.route('/api-keys', methods=['GET', 'POST'])
 @limiter.exempt
@@ -1212,6 +1244,22 @@ def api_keys_debug():
         "prefix": k.key_prefix, "scopes": k.scopes,
         "created": k.created_at
     } for k in rows])
+
+@member_bp.post('/teams/<int:team_id>/leave')
+@login_required
+def leave_team(team_id):
+    """一般成員自行退出團隊"""
+    team = Team.query.get_or_404(team_id)
+    if team.owner_id == current_user.id:
+        flash("您是團隊擁有者，無法直接退出。", "warning")
+        return redirect(url_for('member.teams'))
+    tm = TeamMember.query.filter_by(team_id=team.id,
+                                    user_id=current_user.id).first()
+    if tm:
+        db.session.delete(tm)
+        db.session.commit()
+        flash("✅ 已退出團隊", "success")
+    return redirect(url_for('member.teams'))
     
 @member_bp.post('/api-keys/<int:key_id>/rotate')
 @limiter.exempt
@@ -1265,18 +1313,15 @@ def reveal_api_key(key_id):
 @member_bp.route('/teams', methods=['GET', 'POST'])
 @login_required
 def teams():
+    """團隊列表 + 建立新團隊"""
     form = TeamForm()
     owned = Team.query.filter_by(owner_id=current_user.id).all()
     joined = (
-        Team.query
-        .join(TeamMember, Team.id == TeamMember.team_id)
-        .filter(
-            TeamMember.user_id == current_user.id,
-            Team.owner_id != current_user.id
-        )
-        .all()
+        Team.query.join(TeamMember, Team.id == TeamMember.team_id)
+                  .filter(TeamMember.user_id == current_user.id,
+                          Team.owner_id != current_user.id)
+                  .all()
     )
-
     if form.validate_on_submit():
         new_team = Team(name=form.name.data, owner_id=current_user.id)
         db.session.add(new_team)
@@ -1284,12 +1329,8 @@ def teams():
         flash("✅ 團隊已建立", "success")
         return redirect(url_for('member.teams'))
 
-    return render_template(
-        'member/teams.html',
-        form=form,
-        owned=owned,
-        joined=joined
-    )
+    return render_template('member/teams.html',
+                           form=form, owned=owned, joined=joined)
 
 def send_team_invite_email(inviter: User, target: User, team: Team):
     """寄發團隊邀請通知 Email."""
@@ -1308,77 +1349,121 @@ def send_team_invite_email(inviter: User, target: User, team: Team):
 @member_bp.route('/teams/<int:team_id>', methods=['GET', 'POST'])
 @login_required
 def team_detail(team_id):
+    """團隊成員管理與邀請"""
     team = Team.query.get_or_404(team_id)
-
-    is_owner  = (team.owner_id == current_user.id)
-    is_member = TeamMember.query.filter_by(
-        team_id=team.id, user_id=current_user.id
-    ).first() is not None
-
+    is_owner  = team.owner_id == current_user.id
+    is_member = TeamMember.query.filter_by(team_id=team.id,
+                                           user_id=current_user.id).first()
     if not (is_owner or is_member):
         abort(403)
-    form = InviteForm()
 
-    members = (
-        TeamMember.query
-        .filter_by(team_id=team.id)
-        .order_by(TeamMember.joined.desc())
-        .all()
-    )
+    form = InviteForm()
+    members = (TeamMember.query.filter_by(team_id=team.id)
+                               .order_by(TeamMember.joined.desc())
+                               .all())
 
     if is_owner and form.validate_on_submit():
         raw_email  = form.email.data.lower().strip()
-        email_hash = hashlib.sha256(raw_email.encode()).hexdigest()
-        target = User.query.filter_by(email_hash=email_hash).first()
+        target = User.query.filter_by(
+            email_hash=hashlib.sha256(raw_email.encode()).hexdigest()
+        ).first()
 
         if not target:
             flash("❌ 查無此使用者", "danger")
-        elif TeamMember.query.filter_by(team_id=team.id, user_id=target.id).first():
+        elif TeamMember.query.filter_by(team_id=team.id,
+                                        user_id=target.id).first():
             flash("該使用者已在此團隊", "info")
         else:
-            tm = TeamMember(team_id=team.id, user_id=target.id)
-            db.session.add(tm)
+            db.session.add(TeamMember(team_id=team.id, user_id=target.id))
             db.session.commit()
-            flash(f"✅ 已將 {target.email} 加入團隊！", "success")
+            flash(f"✅ 已將 {raw_email} 加入團隊！", "success")
         return redirect(url_for('member.team_detail', team_id=team.id))
 
-    return render_template(
-        'member/team_detail.html',
-        team=team,
-        members=members,
-        form=form,
-        is_owner=is_owner
-    )
+    return render_template('member/team_detail.html',
+                           team=team, members=members,
+                           form=form, is_owner=is_owner)
 
-@member_bp.route(
-    '/teams/<int:team_id>/members/<int:member_id>/remove',
-    methods=['POST']
-)
+@member_bp.post('/teams/<int:team_id>/members/<int:member_id>/remove')
 @login_required
 def remove_member(team_id, member_id):
+    """擁有者移除成員"""
     team = Team.query.get_or_404(team_id)
     if team.owner_id != current_user.id:
         abort(403)
-    tm = TeamMember.query.get_or_404(member_id)
-    db.session.delete(tm)
+    db.session.delete(TeamMember.query.get_or_404(member_id))
     db.session.commit()
     flash("🗑️ 已移除該成員", "warning")
     return redirect(url_for('member.team_detail', team_id=team.id))
+
 @member_bp.post('/teams/<int:team_id>/delete')
 @login_required
 def delete_team(team_id):
+    """擁有者刪除整個團隊"""
     team = Team.query.get_or_404(team_id)
-    if team.owner_id != current_user.id:       # 只能刪自己的團隊
+    if team.owner_id != current_user.id:
         abort(403)
-
-    # 先清除該團隊所有成員記錄
     TeamMember.query.filter_by(team_id=team.id).delete()
     db.session.delete(team)
     db.session.commit()
-
     flash("🗑️ 團隊已刪除", "warning")
     return redirect(url_for('member.teams'))
+
+@member_bp.route('/teams/<int:team_id>/chat', endpoint='team_chat')
+@login_required
+def team_chat(team_id):
+    """
+    團隊即時聊天頁。
+    只有團隊擁有者或成員可進入。
+    """
+    team = Team.query.get_or_404(team_id)
+    is_member = (team.owner_id == current_user.id) or \
+        TeamMember.query.filter_by(
+            team_id=team.id,
+            user_id=current_user.id
+        ).first()
+
+    if not is_member:
+        abort(403)
+    msgs = (ChatMessage.query
+            .filter_by(team_id=team.id)
+            .order_by(ChatMessage.ts.asc())
+            .limit(50).all())
+
+    return render_template(
+        'member/team_chat.html',
+        team=team,
+        messages=msgs
+    )
+
 app.register_blueprint(member_bp, url_prefix="/member")
+
+@socketio.on('join')
+def handle_join(data):
+    team_id = int(data.get('team_id', 0))
+    join_room(f"team-{team_id}")
+    emit('status', {
+        'msg': f"{current_user.username} 已加入聊天"
+    }, room=f"team-{team_id}")
+
+@socketio.on('send')
+def handle_send(data):
+    team_id = int(data.get('team_id', 0))
+    msg_txt = (data.get('msg') or '').strip()
+    if not msg_txt:
+        return
+    chat_msg = ChatMessage(
+        team_id=team_id,
+        user_id=current_user.id,
+        content=msg_txt
+    )
+    db.session.add(chat_msg)
+    db.session.commit()
+    emit('message', {
+        'user': current_user.username,
+        'msg' : msg_txt,
+        'ts'  : chat_msg.ts
+    }, room=f"team-{team_id}")
+    
 @app.route("/api/market_summary")
 @login_required
 def api_market_summary():
@@ -1478,7 +1563,6 @@ def call_gemini(user_msg: str) -> str:
 @app.route('/api/chat', methods=['POST'])
 def chat():
     try:
-        app.logger.info("▶ 收到 /api/chat 請求，payload: %r", request.get_data())
         data = request.get_json()
         user_msg = data and data.get('message')
         if not user_msg:
@@ -1511,7 +1595,6 @@ def handle_line_message(event: MessageEvent):
         TextSendMessage(text=reply)
     )
 
-print(app.url_map)
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
@@ -1520,5 +1603,4 @@ if __name__ == "__main__":
     )
     app.logger.handlers = logging.getLogger().handlers
     app.logger.setLevel(logging.INFO)
-    app.run(debug=True, threaded=True, use_reloader=False,port=5000)
-print([r.endpoint for r in app.url_map.iter_rules() if r.endpoint.startswith("member.")])
+    socketio.run(app, debug=True, host="0.0.0.0", port=5000)

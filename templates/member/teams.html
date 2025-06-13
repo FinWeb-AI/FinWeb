@@ -10,29 +10,15 @@
     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     color: #edf1f5;
   }
-  /* 強制白字與 placeholder */
-  .form-control,
-  .input {
-    color: #ffffff !important;
-  }
-  .form-control::placeholder,
-  .input::placeholder {
-    color: rgba(255,255,255,0.6) !important;
-  }
-  /* 刪除按鈕套用紅底白字 */
-  .btn-error {
-    background-color: #f43f5e;
-    color: #ffffff;
-  }
-  .btn-error:hover {
-    background-color: #e11d48;
-  }
+  .form-control,.input { color:#fff !important; }
+  .form-control::placeholder,.input::placeholder { color:rgba(255,255,255,0.6)!important; }
+  .btn-error{background:#f43f5e;color:#fff;}
+  .btn-error:hover{background:#e11d48;}
 </style>
 
 <div class="container-fluid py-4">
   <h1 class="display-5 text-white mb-4">團隊管理</h1>
 
-  <!-- 新增團隊表單 -->
   <div class="row mb-4">
     <div class="col-md-6">
       <div class="card glass-card p-4">
@@ -62,12 +48,12 @@
             <div class="mt-auto d-flex">
               <a href="{{ url_for('member.team_detail', team_id=t.id) }}"
                  class="btn btn-primary btn-sm me-2">管理</a>
+              <a href="{{ url_for('member.team_chat', team_id=t.id) }}"
+                 class="btn btn-success btn-sm me-2">聊天</a>
               <form method="POST"
                     action="{{ url_for('member.delete_team', team_id=t.id) }}"
                     onsubmit="return confirm('確定要刪除此團隊嗎？此操作無法復原！');">
-                <button type="submit" class="btn btn-error btn-sm">
-                  刪除
-                </button>
+                <button type="submit" class="btn btn-error btn-sm">刪除</button>
               </form>
             </div>
           </div>
@@ -84,8 +70,17 @@
           <div class="card glass-card p-4 d-flex flex-column h-100">
             <h5 class="text-white">{{ t.name }}</h5>
             <p class="text-white/60">擁有者：{{ t.owner.username }}</p>
-            <a href="{{ url_for('member.team_detail', team_id=t.id) }}"
-               class="btn btn-outline-light btn-sm mt-auto">檢視</a>
+            <div class="mt-auto d-flex">
+              <a href="{{ url_for('member.team_detail', team_id=t.id) }}"
+                 class="btn btn-outline-light btn-sm me-2">檢視</a>
+              <a href="{{ url_for('member.team_chat', team_id=t.id) }}"
+                 class="btn btn-success btn-sm me-2">聊天</a>
+              <form method="POST"
+                    action="{{ url_for('member.leave_team', team_id=t.id) }}"
+                    onsubmit="return confirm('確定要退出此團隊嗎？');">
+                <button type="submit" class="btn btn-error btn-sm">退出</button>
+              </form>
+            </div>
           </div>
         </div>
       {% endfor %}

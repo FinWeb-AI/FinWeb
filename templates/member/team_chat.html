@@ -1,0 +1,113 @@
+{% extends "member/base_member.html" %}
+{% block member_content %}
+<style>
+/* 基本版玻璃訊息框 */
+.chat-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: .75rem;
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.msg-bubble{
+  padding:.5rem 1rem;
+  border-radius: .75rem;
+  max-width: 60%;
+  word-break: break-all;
+}
+.me   {background:#2563eb;color:#fff;margin-left:auto;}
+.other{background:rgba(255,255,255,0.1);color:#e5e7eb;}
+.time {font-size:.75rem;color:rgba(255,255,255,.5);}
+</style>
+
+<div class="container-fluid py-4">
+  <h1 class="display-6 text-white mb-3">
+    <i class="bi bi-chat-left-dots me-2"></i>{{ team.name }} – 即時聊天
+  </h1>
+
+  <div class="chat-card p-3 d-flex flex-column" style="height:70vh;">
+    <!-- 訊息盒 -->
+    <div id="msgBox" class="flex-grow-1 overflow-auto pe-2">
+      {% for m in messages %}
+        <div class="d-flex flex-column mb-2 {% if m.user_id==current_user.id %}align-items-end{% endif %}">
+          <div class="msg-bubble {% if m.user_id==current_user.id %}me{% else %}other{% endif %}">
+            <strong class="me-1">{{ m.user.username }}</strong> {{ m.content }}
+          </div>
+          <span class="time mt-1">
+            {{ m.ts|ts2date }} {{ m.ts|tsfmt("%Y-%m-%d %H:%M:%S") }}
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- 輸入列 -->
+    <div class="mt-3">
+      <div class="input-group">
+        <textarea id="msgInput" rows="1" placeholder="輸入訊息..."
+                  class="form-control bg-transparent text-white"
+                  style="resize:none"></textarea>
+        <button id="sendBtn" class="btn btn-primary">
+          <i class="bi bi-send-fill"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Socket.IO & 聊天腳本 -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  const socket  = io();
+  const teamId  = {{ team.id }};
+  const meId    = {{ current_user.id }};
+  const msgBox  = document.getElementById('msgBox');
+  const msgIn   = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
+
+  /* 加入房間 */
+  socket.emit('join', {team_id: teamId});
+
+  /* 捲到底 */
+  function scrollBottom(){ msgBox.scrollTop = msgBox.scrollHeight; }
+  scrollBottom();
+
+  /* 送出訊息 */
+  function send(){
+    const txt = msgIn.value.trim();
+    if(!txt) return;
+    socket.emit('send', {team_id: teamId, msg: txt});
+    msgIn.value = '';
+  }
+  sendBtn.onclick = send;
+  /* Enter 送出 / Shift+Enter 換行 */
+  msgIn.addEventListener('keydown', e=>{
+    if(e.key==='Enter' && !e.shiftKey){
+      e.preventDefault(); send();
+    }
+  });
+
+  /* 新訊息事件 */
+  socket.on('message', data=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'd-flex flex-column mb-2' +
+      (data.user_id==meId ? ' align-items-end' : '');
+    wrap.innerHTML =
+      `<div class="msg-bubble ${data.user_id==meId?'me':'other'}">
+         <strong class="me-1">${data.user}</strong> ${data.msg}
+       </div>
+       <span class="time mt-1">${data.time}</span>`;
+    msgBox.appendChild(wrap);
+    scrollBottom();
+  });
+
+  /* 系統狀態 */
+  socket.on('status', data=>{
+    const div = document.createElement('div');
+    div.className = 'text-muted small mb-2';
+    div.textContent = data.msg;
+    msgBox.appendChild(div);
+    scrollBottom();
+  });
+</script>
+{% endblock %}
