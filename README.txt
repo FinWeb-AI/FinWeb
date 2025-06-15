@@ -54,3 +54,9 @@
 55. taiwan_ticker.txt: 台灣股票代碼列表
 56. train_ml_models.py: 機器學習模型訓練文件
 57. trend_analysis.py: 趨勢分析功能實現文件
+58. _sidebar.html：儀錶板側邊欄模板
+59. admin_edit_user.html：管理員編輯用戶頁面
+60. admin_panel.html：管理員面板頁面
+61. admin_users.html：管理員用戶列表頁面
+62. teams_chat.html：團隊聊天頁面
+63. grent_admin.html：管理員授權頁面
