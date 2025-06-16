@@ -120,24 +120,23 @@ python app.py          # → http://127.0.0.1:5000
 | 38 | **`templates/sponsor.html`**              | 贊助頁                                    |
 | 39 | **`templates/stock_trends.html`**         | 台股趨勢排行榜                                |
 | 40 | **`templates/stocks.html`**               | 即時行情＆K 線頁                              |
-| 41 | **`templates/trend_home.html`**           | 趨勢分析起始頁                                |
-| 42 | **`templates/trends.html`**               | 趨勢細節頁                                  |
-| 43 | **`app.py`**                              | Flask 入口、藍圖註冊、API / Web 視圖             |
-| 44 | **`backtest.py`**                         | Backtrader 回測 API                      |
-| 45 | **`config.ini`**                          | 機密設定：API KEY、DB 路徑…                    |
-| 46 | **`cv_pattern.py`**                       | YOLOv8 形態辨識 API                        |
-| 47 | **`forecast.py`**                         | LSTM / XGBoost 預測服務                    |
-| 48 | **`metaverse.py`**                        | 3D 新聞粒子資料 API                          |
-| 49 | **`ml_models.py`**                        | 機器學習共用函式                               |
-| 50 | **`portfolio.py`**                        | 投資組合 CRUD 與市值計算                        |
-| 51 | **`requirements.txt`**                    | Python 依賴套件列表                          |
-| 52 | **`sentiment.py`**                        | 關鍵字情緒爬蟲 + 分析                           |
-| 53 | **`stock.py`**                            | 股票即時報價 & KLine                         |
-| 54 | **`taiwan_ticker.txt`**                   | TWSE/OTC 全股票代碼                         |
-| 55 | **`train_ml_models.py`**                  | 模型訓練腳本                                 |
-| 56 | **`trend_analysis.py`**                   | 熱門股票趨勢 (成交量/搜尋量)                       |
-| 57 | **`templates/admin_panel.html`**          | 管理員儀表板                                 |
-| 58 | **`templates/admin_users.html`**          | 使用者列表 (Admin)                          |
-| 59 | **`templates/admin_edit_user.html`**      | 編輯使用者 (Admin)                          |
-| 60 | **`templates/teams_chat.html`**           | 團隊聊天室 (WebSocket)                      |
-| 61 | **`templates/grent_admin.html`**          | 管理員授權頁 (權限調整)                          |
+| 41 | **`templates/trends.html`**               | 趨勢細節頁                                  |
+| 42 | **`app.py`**                              | Flask 入口、藍圖註冊、API / Web 視圖             |
+| 43 | **`backtest.py`**                         | Backtrader 回測 API                      |
+| 44 | **`config.ini`**                          | 機密設定：API KEY、DB 路徑…                    |
+| 45 | **`cv_pattern.py`**                       | YOLOv8 形態辨識 API                        |
+| 46 | **`forecast.py`**                         | LSTM / XGBoost 預測服務                    |
+| 47 | **`metaverse.py`**                        | 3D 新聞粒子資料 API                          |
+| 48 | **`ml_models.py`**                        | 機器學習共用函式                               |
+| 49 | **`portfolio.py`**                        | 投資組合 CRUD 與市值計算                        |
+| 50 | **`requirements.txt`**                    | Python 依賴套件列表                          |
+| 51 | **`sentiment.py`**                        | 關鍵字情緒爬蟲 + 分析                           |
+| 52 | **`stock.py`**                            | 股票即時報價 & KLine                         |
+| 53 | **`taiwan_ticker.txt`**                   | TWSE/OTC 全股票代碼                         |
+| 54 | **`train_ml_models.py`**                  | 模型訓練腳本                                 |
+| 55 | **`trend_analysis.py`**                   | 熱門股票趨勢 (成交量/搜尋量)                       |
+| 56 | **`templates/admin_panel.html`**          | 管理員儀表板                                 |
+| 57 | **`templates/admin_users.html`**          | 使用者列表 (Admin)                          |
+| 58 | **`templates/admin_edit_user.html`**      | 編輯使用者 (Admin)                          |
+| 59 | **`templates/teams_chat.html`**           | 團隊聊天室 (WebSocket)                      |
+| 60 | **`templates/grent_admin.html`**          | 管理員授權頁 (權限調整)                          |
