@@ -1,8 +1,3 @@
-Below is a **ready-to-paste** README (markdown).
-Just copy **everything between the two horizontal rules** into `README.md` (or `readme.txt` if you prefer-–GitHub will still render the markdown).
-
----
-
 ```markdown
 # FinWeb – 即時金融資訊平台
 
@@ -84,14 +79,3 @@ python app.py          # → http://127.0.0.1:5000
 | **`app.py`**           | Flask 入口                                                      |
 | **`requirements.txt`** | Python 依賴列表                                                   |
 | 其餘 `*.py`              | 各功能 Blueprint（`forecast.py`, `cv_pattern.py`, `backtest.py`…） |
-
-> **完整檔案清單** 請見 `docs/file_index.md`，或直接瀏覽專案樹狀結構。
-
-## License
-
-Distributed under the **MIT License** – see [`LICENSE`](LICENSE) for details.
-
-```
-
----
-```
