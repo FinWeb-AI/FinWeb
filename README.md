@@ -1,6 +1,4 @@
 # FinWeb – 即時金融資訊平台
-
-> 整合 **股票、加密貨幣、AI 智能預測** 與多種金融工具，一站搞定投資決策所需資訊  
 > **Stocks • Crypto • AI Forecast • Pattern Detection • Backtesting**
 
 <p align="center">
@@ -15,8 +13,7 @@
   * YOLOv8 蠟燭形態偵測  
   * LSTM / XGBoost 價格預測  
   * Backtrader 策略回測  
-* **權限‧API-Key 管理**：會員、API 金鑰、速率限制、SQLite LRU 快取  
-* **Gunicorn + Nginx 一鍵部署**：systemd unit、Let’s Encrypt 自動續約  
+* **權限‧API-Key 管理**：會員、API 金鑰、速率限制、SQLite LRU 快取   
 
 ## 系統架構
 ```
