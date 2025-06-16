@@ -21,13 +21,13 @@
 ## 系統架構
 ```
 
-Browser ── HTTPS ──► Nginx (reverse proxy)
+Browser ── HTTPS ──► Nginx (Reverse Proxy)
 │
 └► Gunicorn (WSGI, 4 workers)
 │
 ├── Flask blueprints
 │     • stocks      • crypto
-│     • forecast    • cv\_pattern
+│     • forecast    • cv_pattern
 │     • backtest    • member center
 │
 ├── SQLite / SQLAlchemy
