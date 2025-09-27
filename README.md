@@ -47,7 +47,7 @@ Browser ── HTTPS ──► Nginx (Reverse Proxy)
 ### 本機開發
 ```bash
 git clone https://github.com/FinWeb-AI/FinWeb.git
-cd finweb
+cd FinWeb
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
